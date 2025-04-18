@@ -1,0 +1,41 @@
+# Terraform files
+*.tfstate
+*.tfstate.*
+.terraform/
+.crash/
+.terraform.lock.hcl
+terraform.tfvars
+*.backup
+
+# Sensitive output files
+output.txt
+*.log
+
+# Bash scripts logs or outputs
+bash_scripts/logs/
+*.sh~
+
+# Lambda zip packages
+*.zip
+
+# OS / Editor specific
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Python __pycache__
+__pycache__/
+*.pyc
+
+# Backup files
+*.bak
+*.tmp
+*.old
+
+# Test files
+test.txt
+crr_test.txt
+

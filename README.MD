@@ -1,0 +1,1 @@
+1. cd into state-bootstrap directory and run `terraform init` and `terraform apply -auto-approve`
