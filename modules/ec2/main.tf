@@ -1,3 +1,11 @@
+terraform {
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = "~> 5.0"
+    }
+  }
+}
 data "aws_ami" "amazon_linux" {
   most_recent = true
   owners      = ["amazon"]
@@ -77,7 +85,7 @@ resource "aws_launch_template" "app" {
 }
 
 resource "aws_autoscaling_group" "app" {
-  name                = var.region == "us-east-1" ? "lamp-ec2-asg" : "lamp-ec2-asg-primary"
+  name                = var.region == "us-east-1" ? var.secondary_asg_name : var.primary_asg_name
   desired_capacity    = var.desired_capacity
   max_size            = 2
   min_size            = 1

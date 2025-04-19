@@ -16,3 +16,7 @@ output "role_arn" {
   value       = aws_iam_role.ec2_role.arn
 }
 
+output "failover_lambda_role_arn" {
+  description = "ARN of the IAM role for the failover Lambda function"
+  value       = aws_iam_role.failover_lambda_role.arn
+}

@@ -124,10 +124,20 @@ variable "repository_name" {
 }
 
 
-
-
 variable "health_check_path" {
   description = "Path for HealthCheck"
   type        = string
 
+}
+
+variable "primary_asg_name" {
+  type = string
+}
+variable "secondary_asg_name" {
+  type = string
+}
+
+variable "replica_db_identifier" {
+  type = string
+  
 }

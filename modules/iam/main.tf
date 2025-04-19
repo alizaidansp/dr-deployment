@@ -1,9 +1,11 @@
 
+# modules/iam/main.tf
 terraform {
   required_providers {
     aws = {
       source  = "hashicorp/aws"
       version = "~> 5.0"
+      configuration_aliases = [aws, aws.secondary]
     }
   }
 }
@@ -11,6 +13,7 @@ data "aws_caller_identity" "current" {}
 
 # S3 Replication Role (Separate service role)
 resource "aws_iam_role" "s3_replication" {
+  provider = aws
   name = var.replication_role_name
   assume_role_policy = jsonencode({
     Version = "2012-10-17"

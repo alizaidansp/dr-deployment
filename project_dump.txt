@@ -1,0 +1,2184 @@
+
+==== ./main.tf ====
+# ( : > output.txt && for file in *.tf; do
+#   echo "===== $file =====" >> output.txt
+#   cat "$file" >> output.txt
+#   echo "" >> output.txt
+# done )
+
+# secondary_region.tf
+
+# Global Accelerator COnfiguration
+module "global_accelerator" {
+  source              = "./modules/global_accelerator"
+  secondary_region =var.secondary_region
+  primary_region = var.primary_region
+  health_check_path = var.health_check_path
+  primary_alb_arn     = module.alb.alb_arn
+  secondary_alb_arn   = module.alb_secondary.alb_arn
+
+}
+
+
+# ECR Configuration
+module "ecr" {
+  source           = "./modules/ecr"
+  repository_name  = var.repository_name
+  secondary_region = var.secondary_region  # us-east-1
+  account_id       = var.account_id
+}
+
+# # VPC Module
+module "vpc" {
+  source               = "./modules/vpc"
+  vpc_cidr             = var.vpc_cidr
+  public_subnet_cidrs  = var.public_subnet_cidrs
+  private_subnet_cidrs = var.private_subnet_cidrs
+  availability_zones   = var.availability_zones
+}
+
+
+module "vpc_secondary" {
+  source              = "./modules/vpc"
+  providers = {
+    aws = aws.secondary
+  }
+  vpc_cidr            = var.vpc_secondary_cidr
+  public_subnet_cidrs = var.public_secondary_subnet_cidrs
+  private_subnet_cidrs = var.private_secondary_subnet_cidrs
+  availability_zones  = var.availability_zones_secondary
+}
+
+# Security Group Module
+module "security_group" {
+  source = "./modules/security_group"
+  vpc_id = module.vpc.vpc_id
+}
+
+module "security_group_secondary" {
+  source    = "./modules/security_group"
+  providers = {
+    aws = aws.secondary
+  }
+  vpc_id    = module.vpc_secondary.vpc_id
+}
+
+# RDS Module (Primary Region)
+module "rds" {
+  source            = "./modules/rds"
+  vpc_id            = module.vpc.vpc_id
+  subnet_ids        = module.vpc.private_subnet_ids
+  security_group_id = module.security_group.rds_sg_id
+  db_name           = var.db_name
+  db_username       = var.db_username
+  multi_az          = false
+  db_password_ssm_param = var.db_password_ssm_param
+}
+
+# Replicate the Password to Secondary Region's SSM
+# Replicate the Password to Secondary Region's SSM
+resource "aws_ssm_parameter" "db_master_password_secondary" {
+  provider    = aws.secondary
+  name        = var.db_password_ssm_param
+  description = "Master password for Lamp RDS DB (secondary)"
+  type        = "SecureString"
+  value       = data.aws_ssm_parameter.db_master.value # Use primary password
+  tags = {
+    Name        = "lamp-rds-password"
+    Environment = "DisasterRecovery"
+    Project     = "LaravelApp"
+  }
+}
+
+data "aws_ssm_parameter" "db_master" {
+  name            = module.rds.db_master_ssm_name
+  with_decryption = true
+  depends_on      = [module.rds] # Ensure RDS module is applied first
+}
+
+# RDS Read Replica Subnet Group (Secondary Region)
+resource "aws_db_subnet_group" "replica" {
+  provider   = aws.secondary
+  name       = "lamp-db-subnet-group-replica"
+  subnet_ids = module.vpc_secondary.private_subnet_ids
+  tags = {
+    Name = "lamp-db-subnet-group-replica"
+  }
+}
+
+# RDS Read Replica (Secondary Region)
+resource "aws_db_instance" "replica" {
+  provider             = aws.secondary
+  identifier           = "lamp-db-replica"
+  replicate_source_db  = module.rds.main_db_arn
+  instance_class       = "db.t3.micro"
+  db_subnet_group_name = aws_db_subnet_group.replica.name
+  vpc_security_group_ids = [module.security_group_secondary.rds_sg_id]
+  skip_final_snapshot  = true
+  tags = {
+    Name = "lamp-db-replica"
+  }
+}
+
+# Output for Replica Endpoint
+output "replica_endpoint" {
+  value = split(":", aws_db_instance.replica.endpoint)[0]
+}
+
+# S3 Module
+module "s3" {
+   providers = {
+    aws           = aws
+    aws.secondary = aws.secondary
+  }
+  source = "./modules/s3"
+  primary_bucket_name   = var.primary_bucket_name
+  secondary_bucket_name = var.secondary_bucket_name
+  replication_role_arn  = module.iam.s3_replication_role_arn
+}
+
+# # IAM Module
+module "iam" {
+ 
+  source    = "./modules/iam"
+  providers = {
+    aws           = aws
+    aws.secondary = aws.secondary
+  }
+  replication_role_name = var.replication_role_name
+  primary_bucket_arn  = module.s3.primary_bucket_arn
+  secondary_bucket_arn = module.s3.secondary_bucket_arn
+  primary_bucket_id   = module.s3.primary_bucket_id
+  secondary_bucket_id   = module.s3.secondary_bucket_id
+  laravel_role_name   = var.laravel_role_name
+  region = var.primary_region
+  db_password_ssm_param = module.rds.db_master_ssm_name
+  secondary_region = var.secondary_region
+  account_id = var.account_id
+}
+
+
+
+
+
+# # # ALB Module
+module "alb" {
+  source            = "./modules/alb"
+  vpc_id            = module.vpc.vpc_id
+  subnet_ids        = module.vpc.public_subnet_ids
+  security_group_id = module.security_group.alb_sg_id
+  target_group_port = 80
+  health_check_path= var.health_check_path
+}
+
+# ALB in Secondary Region
+module "alb_secondary" {
+  source            = "./modules/alb"
+  providers = {
+    aws = aws.secondary
+  }
+  vpc_id            = module.vpc_secondary.vpc_id
+  subnet_ids        = module.vpc_secondary.public_subnet_ids
+  security_group_id = module.security_group_secondary.alb_sg_id
+  target_group_port = 80
+  health_check_path=var.health_check_path
+}
+# # # EC2 Module
+module "ec2" {
+  source               = "./modules/ec2"
+  region = var.primary_region
+  subnet_ids           = module.vpc.private_subnet_ids
+  security_group_id    = module.security_group.ec2_sg_id
+  iam_instance_profile = module.iam.instance_profile_name  # Updated to use IAM module output
+  alb_target_group_arn = module.alb.target_group_arn
+  db_host              = module.rds.db_endpoint
+  db_name           = var.db_name
+  db_username         = var.db_username
+  aws_bucket   = module.s3.primary_bucket_name
+  aws_url      = module.s3.primary_bucket_url
+  aws_endpoint = module.s3.primary_bucket_endpoint
+  account_id = var.account_id
+  ecr_repo_url = module.ecr.primary_repository_url
+  desired_capacity=var.desired_capacity
+}
+
+
+# EC2 Auto Scaling Group
+module "ec2_secondary" {
+  source               = "./modules/ec2"
+  providers = {
+    aws = aws.secondary
+  }
+  region              = var.secondary_region
+  subnet_ids          = module.vpc_secondary.private_subnet_ids
+  security_group_id   = module.security_group_secondary.ec2_sg_id
+  iam_instance_profile = module.iam.instance_profile_name
+  alb_target_group_arn = module.alb_secondary.target_group_arn
+  db_host             = aws_db_instance.replica.endpoint
+  db_name             = var.db_name
+  db_username         = var.db_username
+  aws_bucket          = module.s3.secondary_bucket_name
+  aws_url             = module.s3.secondary_bucket_url
+  aws_endpoint        = module.s3.secondary_bucket_endpoint
+  desired_capacity    = var.secondary_desired_capacity
+  account_id = var.account_id
+  ecr_repo_url = module.ecr.secondary_repository_url
+}
+
+
+
+
+# Primary Monitoring Module
+module "primary_monitoring" {
+  source                  = "./modules/primary_monitoring"
+  
+  primary_region          = var.primary_region
+  primary_alb_arn         = module.alb.alb_arn
+  primary_target_group_arn = module.alb.target_group_arn
+}
+
+# Forward SNS events to secondary region
+data "aws_caller_identity" "current" {}
+
+resource "aws_cloudwatch_event_rule" "forward_sns_to_secondary" {
+
+  name        = "forward-sns-to-secondary"
+  description = "Forward SNS Publish events to secondary region"
+  event_pattern = jsonencode({
+    "source"      = ["aws.sns"]
+    "detail-type" = ["SNS Publish"]
+    "resources"   = [module.primary_monitoring.sns_topic_arn]
+  })
+}
+
+resource "aws_cloudwatch_event_target" "secondary_bus" {
+  
+  rule      = aws_cloudwatch_event_rule.forward_sns_to_secondary.name
+  target_id = "secondaryEventBus"
+  arn       = "arn:aws:events:${var.secondary_region}:${data.aws_caller_identity.current.account_id}:event-bus/default"
+}
+
+# Secondary Failover Module
+module "secondary_failover" {
+  source = "./modules/secondary_failover"
+  providers = {
+    aws = aws.secondary
+  }
+  secondary_region = var.secondary_region
+  sns_topic_arn   = module.primary_monitoring.sns_topic_arn
+  lambda_role_arn = module.iam.failover_lambda_role_arn
+}
+
+
+==== ./modules/alb/main.tf ====
+terraform {
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = "~> 5.0"
+    }
+  }
+}
+resource "aws_lb" "alb" {
+  name               = "lamp-alb"
+  internal           = false
+  load_balancer_type = "application"
+  security_groups    = [var.security_group_id]
+  subnets            = var.subnet_ids
+  tags = {
+    Name = "lamp-alb"
+  }
+}
+
+resource "aws_lb_target_group" "app" {
+  name        = "lamp-app-tg"
+  port        = var.target_group_port
+  protocol    = "HTTP"
+  vpc_id      = var.vpc_id
+  target_type = "instance"
+
+  health_check {
+    path                = var.health_check_path
+    protocol            = "HTTP"
+    matcher             = "200"
+    interval            = 30
+    timeout             = 5
+    healthy_threshold   = 2
+    unhealthy_threshold = 2
+  }
+}
+
+resource "aws_lb_listener" "http" {
+  load_balancer_arn = aws_lb.alb.arn
+  port              = var.target_group_port
+  protocol          = "HTTP"
+  default_action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.app.arn
+  }
+}
+
+
+==== ./modules/alb/outputs.tf ====
+output "alb_dns_name" {
+  description = "DNS name of the ALB"
+  value       = aws_lb.alb.dns_name
+}
+
+output "target_group_arn" {
+  description = "ARN of the ALB target group"
+  value       = aws_lb_target_group.app.arn
+}
+# modules/alb/outputs.tf
+output "alb_arn" {
+  description = "ARN of the Application Load Balancer"
+  value       = aws_lb.alb.arn
+}
+
+
+
+==== ./modules/alb/variables.tf ====
+variable "vpc_id" {
+  description = "VPC ID for the ALB"
+  type        = string
+}
+
+variable "subnet_ids" {
+  description = "List of subnet IDs for the ALB"
+  type        = list(string)
+}
+
+variable "security_group_id" {
+  description = "Security group ID for the ALB"
+  type        = string
+}
+
+variable "target_group_port" {
+  description = "Port for the ALB target group"
+  type        = number
+}
+
+variable "health_check_path" {
+  description = "Path for HealthCheck"
+  type        = string
+
+}
+
+
+==== ./modules/ec2/main.tf ====
+terraform {
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = "~> 5.0"
+    }
+  }
+}
+data "aws_ami" "amazon_linux" {
+  most_recent = true
+  owners      = ["amazon"]
+  filter {
+    name   = "name"
+    values = ["amzn2-ami-hvm-*-x86_64-gp2"]
+  }
+}
+
+resource "aws_launch_template" "app" {
+  name_prefix   = "lamp-app-"
+  image_id      = data.aws_ami.amazon_linux.id
+  instance_type = "t2.micro"
+  # key_name      = var.ssh_key_name
+  iam_instance_profile {
+    name = var.iam_instance_profile
+  }
+
+  network_interfaces {
+    associate_public_ip_address = false
+    security_groups             = [var.security_group_id]
+  }
+
+  user_data = base64encode(<<-EOF
+    #!/bin/bash
+
+    # Set variables
+    IMAGE=${var.ecr_repo_url}:latest"
+    # IMAGE="183631301567.dkr.ecr.eu-west-1.amazonaws.com/lamp-app:latest"
+    DB_PASSWORD=$(aws ssm get-parameter --name "/lamp/rds/master_password" --with-decryption --region ${var.region} --query 'Parameter.Value' --output text)
+
+    # Install and start Docker
+    yum update -y
+    amazon-linux-extras install docker -y
+    service docker start
+    usermod -a -G docker ec2-user
+
+    # Login to ECR and pull image
+    aws ecr get-login-password --region ${var.region} | docker login --username AWS --password-stdin ${var.ecr_repo_url}
+    docker pull $IMAGE || echo "Pull failed" >> /var/log/user-data.log
+
+    # Run container
+    docker run -p 80:80 \
+      -e APP_ENV=production \ 
+      -e DB_HOST=${var.db_host} \
+      -e DB_CONNECTION=mysql \
+      -e DB_PORT=3306 \
+      -e DB_DATABASE=${var.db_name} \
+      -e DB_USERNAME=${var.db_username} \
+      -e DB_PASSWORD="$DB_PASSWORD" \
+      -e AWS_DEFAULT_REGION=${var.region} \
+      -e AWS_BUCKET=${var.aws_bucket} \
+      -e AWS_URL=${var.aws_url} \
+      -e AWS_ENDPOINT=${var.aws_endpoint} \
+      $IMAGE || echo "Run failed" >> /var/log/user-data.log
+
+    # Wait and then run migrations
+    sleep 10
+    CONTAINER_ID=$(docker ps -q -f "ancestor=$IMAGE")
+    if [ -n "$CONTAINER_ID" ]; then
+      docker exec $CONTAINER_ID php artisan session:table || echo "Session table failed" >> /var/log/user-data.log
+      docker exec $CONTAINER_ID php artisan migrate --force || echo "Migration failed" >> /var/log/user-data.log
+      docker exec $CONTAINER_ID php artisan db:seed || echo "Seeding failed" >> /var/log/user-data.log
+    else
+      echo "No container running" >> /var/log/user-data.log
+    fi
+
+  EOF
+  )
+  lifecycle {
+    create_before_destroy = true
+  }
+
+  tags = {
+    Name = "lamp-ec2"
+  }
+}
+
+resource "aws_autoscaling_group" "app" {
+  name                = var.region == "us-east-1" ? "lamp-ec2-asg" : "lamp-ec2-asg-primary"
+  desired_capacity    = var.desired_capacity
+  max_size            = 2
+  min_size            = 1
+  vpc_zone_identifier = var.subnet_ids
+  target_group_arns   = [var.alb_target_group_arn]
+  launch_template {
+    id      = aws_launch_template.app.id
+    version = "$Latest"
+  }
+
+  tag {
+    key                 = "Name"
+    value               = var.region == "us-east-1" ? "lamp-ec2-asg" : "lamp-ec2-asg-primary"
+    propagate_at_launch = true
+  }
+}
+
+# Data source to fetch instances managed by the ASG
+data "aws_instances" "asg_instances" {
+  instance_tags = {
+    "aws:autoscaling:groupName" = aws_autoscaling_group.app.name
+  }
+
+  depends_on = [aws_autoscaling_group.app]
+}
+
+
+==== ./modules/ec2/outputs.tf ====
+output "ec2_private_ip" {
+  description = "Private IPs of the EC2 instances in the Auto Scaling Group"
+  value       = data.aws_instances.asg_instances.private_ips
+}
+
+
+==== ./modules/ec2/variables.tf ====
+variable "subnet_ids" {
+  description = "List of subnet IDs for the Auto Scaling Group"
+  type        = list(string)
+}
+
+variable "security_group_id" {
+  description = "Security group ID for EC2 instances"
+  type        = string
+}
+
+
+
+variable "iam_instance_profile" {
+  description = "IAM instance profile name for EC2 instances"
+  type        = string
+}
+
+variable "alb_target_group_arn" {
+  description = "ARN of the ALB target group"
+  type        = string
+}
+
+variable "db_host" {
+  description = "RDS database host endpoint"
+  type        = string
+}
+
+
+variable "db_username" {
+  description = "Database username"
+  type        = string
+  
+}
+variable "db_name" {
+  description = "Database username"
+  type        = string
+  
+}
+
+variable "region" {
+  description = "AWS region for resource ARNs"
+  type        = string
+}
+variable "aws_bucket" {
+  description = "Name of the S3 bucket"
+  type        = string
+}
+
+variable "aws_url" {
+  description = "URL of the S3 bucket"
+  type        = string
+}
+
+variable "aws_endpoint" {
+  description = "Endpoint of the S3 bucket"
+  type        = string
+}
+
+variable "ecr_repo_url" {
+  description = "URL of the ECR repository"
+  type        = string
+}
+
+variable "account_id" {
+  description = "AWS account ID"
+  type        = string
+}
+variable "desired_capacity" {
+  type = number
+}
+
+
+==== ./modules/ecr/main.tf ====
+# Create the ECR repository in the primary region
+resource "aws_ecr_repository" "lamp_app" {
+  name                 = var.repository_name
+  image_tag_mutability = "MUTABLE"
+  image_scanning_configuration {
+    scan_on_push = true
+  }
+  tags = {
+    Name        = "lamp-app"
+    Environment = "DisasterRecovery"
+    Project     = "LaravelApp"
+  }
+}
+
+# Configure replication to the secondary region
+resource "aws_ecr_replication_configuration" "replication" {
+  replication_configuration {
+    rule {
+      destination {
+        region      = var.secondary_region
+        registry_id = var.account_id
+      }
+      repository_filter {
+        filter      = var.repository_name
+        filter_type = "PREFIX_MATCH"
+      }
+    }
+  }
+}
+
+
+==== ./modules/ecr/outputs.tf ====
+output "primary_repository_url" {
+  description = "URL of the primary ECR repository"
+  value       = aws_ecr_repository.lamp_app.repository_url
+}
+output "secondary_repository_url" {
+  description = "URL of the replicated ECR repository in the secondary region"
+  value       = "${var.account_id}.dkr.ecr.${var.secondary_region}.amazonaws.com/${var.repository_name}"
+}
+
+
+
+
+
+==== ./modules/ecr/variables.tf ====
+variable "repository_name" {
+  description = "Name of the ECR repository"
+  type        = string
+  default     = "lamp-app"
+}
+
+variable "secondary_region" {
+  description = "AWS region for the secondary resources (replication destination)"
+  type        = string
+}
+
+variable "account_id" {
+  description = "AWS account ID"
+  type        = string
+}
+
+
+==== ./modules/global_accelerator/main.tf ====
+resource "aws_globalaccelerator_accelerator" "main" {
+  name            = var.accelerator_name
+  ip_address_type = var.ip_address_type
+  enabled         = var.enabled
+}
+
+resource "aws_globalaccelerator_listener" "main" {
+  accelerator_arn = aws_globalaccelerator_accelerator.main.id
+  protocol        = var.listener_protocol
+
+  port_range {
+    from_port = var.port
+    to_port   = var.port
+  }
+}
+
+resource "aws_globalaccelerator_endpoint_group" "primary" {
+  listener_arn            = aws_globalaccelerator_listener.main.id
+  endpoint_group_region   = var.primary_region
+  traffic_dial_percentage = 100
+  health_check_port       = var.health_check_port
+  health_check_protocol   = var.health_check_protocol
+  health_check_path       = var.health_check_path
+
+  endpoint_configuration {
+    endpoint_id = var.primary_alb_arn
+    weight      = 100
+  }
+}
+
+resource "aws_globalaccelerator_endpoint_group" "secondary" {
+  listener_arn            = aws_globalaccelerator_listener.main.id
+  endpoint_group_region   = var.secondary_region
+  traffic_dial_percentage = 0
+  health_check_port       = var.health_check_port
+  health_check_protocol   = var.health_check_protocol
+  health_check_path       = var.health_check_path
+
+  endpoint_configuration {
+    endpoint_id = var.secondary_alb_arn
+    weight      = 100
+  }
+}
+
+
+==== ./modules/global_accelerator/outputs.tf ====
+output "global_accelerator_ips" {
+  value = aws_globalaccelerator_accelerator.main.ip_sets[0].ip_addresses
+}
+
+
+
+==== ./modules/global_accelerator/variables.tf ====
+
+
+variable "accelerator_name" {
+  type        = string
+  default     = "lamp-accelerator"
+  description = "Name of the Global Accelerator"
+}
+
+variable "ip_address_type" {
+  type    = string
+  default = "IPV4"
+}
+
+variable "enabled" {
+  type    = bool
+  default = true
+}
+
+variable "listener_protocol" {
+  type    = string
+  default = "TCP"
+}
+
+variable "port" {
+  type    = number
+  default = 80
+}
+
+variable "primary_region" {
+  type    = string
+}
+
+variable "secondary_region" {
+  type    = string
+}
+
+variable "health_check_port" {
+  type    = number
+  default = 80
+}
+
+variable "health_check_protocol" {
+  type    = string
+  default = "HTTP"
+}
+
+variable "health_check_path" {
+  type    = string
+}
+
+variable "primary_alb_arn" {
+  type = string
+}
+
+variable "secondary_alb_arn" {
+  type = string
+}
+
+
+
+==== ./modules/iam/main.tf ====
+
+# modules/iam/main.tf
+terraform {
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = "~> 5.0"
+      configuration_aliases = [aws, aws.secondary]
+    }
+  }
+}
+data "aws_caller_identity" "current" {}
+
+# S3 Replication Role (Separate service role)
+resource "aws_iam_role" "s3_replication" {
+  provider = aws
+  name = var.replication_role_name
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "s3.amazonaws.com"
+        }
+      }
+    ]
+  })
+  tags = {
+    Name        = "S3ReplicationRole"
+    Environment = "DisasterRecovery"
+    Project     = "LaravelApp"
+  }
+}
+
+# Consolidated EC2 Role with S3 Access
+resource "aws_iam_role" "ec2_role" {
+  name = "${var.role_name}-role"
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Action    = "sts:AssumeRole"
+      Effect    = "Allow"
+      Principal = { Service = "ec2.amazonaws.com" }
+    }]
+  })
+  tags = {
+    Name        = "EC2-Laravel-Role"
+    Environment = "DisasterRecovery"
+  }
+}
+
+# Combined Policy Attachment
+# Attach static (predefined) IAM policies
+resource "aws_iam_role_policy_attachment" "ec2_static_policies" {
+  for_each = toset([
+    "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly",
+    "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+  ])
+
+  role       = aws_iam_role.ec2_role.name
+  policy_arn = each.value
+}
+
+# Attach custom (dynamic) IAM policies
+resource "aws_iam_role_policy_attachment" "ec2_custom_policies" {
+  for_each = {
+    "s3_access"            = aws_iam_policy.s3_access.arn
+    "ecr_custom"           = aws_iam_policy.ecr_custom.arn
+    "ssm_db_password_access" = aws_iam_policy.ssm_db_password_access.arn
+  }
+
+  role       = aws_iam_role.ec2_role.name
+  policy_arn = each.value
+}
+
+# Custom S3 Access Policy
+resource "aws_iam_policy" "s3_access" {
+  name        = "${var.role_name}-s3-access"
+  description = "Combined S3 access policy for Laravel app"
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action   = [
+          "s3:PutObject",
+          "s3:GetObject",
+          "s3:DeleteObject",
+          "s3:ListBucket",
+          "s3:PutObjectAcl"
+        ]
+        Effect   = "Allow"
+        Resource = [
+          var.primary_bucket_arn,
+          "${var.primary_bucket_arn}/*",
+          var.secondary_bucket_arn,
+          "${var.secondary_bucket_arn}/*"
+        ]
+      }
+    ]
+  })
+}
+
+# Custom ECR Policy
+resource "aws_iam_policy" "ecr_custom" {
+  name        = "${var.role_name}-ecr-access"
+  description = "Custom ECR access policy"
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect   = "Allow"
+        Action   = [
+          "ecr:GetDownloadUrlForLayer",
+          "ecr:BatchGetImage",
+          "ecr:BatchCheckLayerAvailability"
+        ]
+        Resource = [
+          "arn:aws:ecr:${var.region}:${var.account_id}:repository/lamp-app",
+          "arn:aws:ecr:${var.secondary_region}:${var.account_id}:repository/lamp-app-secondary"
+        ]
+      }
+    ]
+  })
+}
+resource "aws_iam_policy" "ssm_db_password_access" {
+  name        = "${var.role_name}-ssm-db-access"
+  description = "Allow EC2 to read DB password from SSM Parameter Store"
+  policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [
+      {
+        Effect   = "Allow",
+        Action   = [
+          "ssm:GetParameter"
+        ],
+        Resource =[
+        "arn:aws:ssm:${var.region}:${data.aws_caller_identity.current.account_id}:parameter${var.db_password_ssm_param}",
+        "arn:aws:ssm:${var.secondary_region}:${data.aws_caller_identity.current.account_id}:parameter${var.db_password_ssm_param}"
+        
+        ]
+
+          
+      }
+    ]
+  })
+}
+
+# Single Instance Profile
+resource "aws_iam_instance_profile" "ec2_instance_profile" {
+  name = "${var.role_name}-instance-profile"
+  role = aws_iam_role.ec2_role.name
+}
+
+# S3 Replication Policy (Remains Separate)
+resource "aws_iam_role_policy" "s3_replication_policy" {
+  role = aws_iam_role.s3_replication.id
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = [
+          "s3:GetReplicationConfiguration",
+          "s3:ListBucket",
+          "s3:GetObjectVersionForReplication",
+          "s3:GetObjectVersionTagging",
+          "s3:GetObjectVersionAcl"
+        ]
+        Effect   = "Allow"
+        Resource = ["${var.primary_bucket_arn}", "${var.primary_bucket_arn}/*"]
+      },
+      {
+        Action = [
+          "s3:ReplicateObject",
+          "s3:ReplicateDelete",
+          "s3:ReplicateTags",
+          "s3:ObjectOwnerOverrideToBucketOwner"
+        ]
+        Effect   = "Allow"
+        Resource = ["${var.secondary_bucket_arn}/*"]
+      },
+      {
+        Action = [
+          "s3:GetBucketVersioning",
+          "s3:PutBucketVersioning"
+        ]
+        Effect   = "Allow"
+        Resource = [var.primary_bucket_arn, var.secondary_bucket_arn]
+      }
+    ]
+  })
+}
+
+
+resource "aws_iam_role" "failover_lambda_role" {
+  provider = aws.secondary
+  name     = "failover-lambda-role"
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Action    = "sts:AssumeRole"
+      Effect    = "Allow"
+      Principal = { Service = "lambda.amazonaws.com" }
+    }]
+  })
+}
+
+resource "aws_iam_role_policy" "failover_lambda_policy" {
+  provider = aws.secondary
+  role     = aws_iam_role.failover_lambda_role.id
+  policy   = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action   = ["rds:PromoteReadReplica", "rds:DescribeDBInstances"]
+        Effect   = "Allow"
+        Resource = "*"
+      },
+      {
+        Action   = ["autoscaling:UpdateAutoScalingGroup", "autoscaling:DescribeAutoScalingGroups"]
+        Effect   = "Allow"
+        Resource = "*"
+      }
+    ]
+  })
+}
+
+
+==== ./modules/iam/outputs.tf ====
+# S3 OUTPUTS
+output "s3_replication_role_arn" {
+  description = "ARN of the IAM role for S3 replication"
+  value       = aws_iam_role.s3_replication.arn
+}
+
+
+# EC2 OUTPUTS
+output "instance_profile_name" {
+  description = "Name of the IAM instance profile"
+  value       = aws_iam_instance_profile.ec2_instance_profile.name
+}
+
+output "role_arn" {
+  description = "ARN of the IAM role"
+  value       = aws_iam_role.ec2_role.arn
+}
+
+output "failover_lambda_role_arn" {
+  description = "ARN of the IAM role for the failover Lambda function"
+  value       = aws_iam_role.failover_lambda_role.arn
+}
+
+
+
+==== ./modules/iam/variables.tf ====
+# S3 VARIABLES
+variable "replication_role_name" {
+  description = "Name of the IAM role for S3 replication"
+  type        = string
+  default     = "s3-replication-role"
+}
+
+variable "laravel_role_name" {
+  description = "Name of the IAM role for Laravel application"
+  type        = string
+  default     = "laravel-app-role"
+}
+
+variable "primary_bucket_arn" {
+  description = "ARN of the primary S3 bucket"
+  type        = string
+}
+
+variable "secondary_bucket_arn" {
+  description = "ARN of the secondary S3 bucket"
+  type        = string
+}
+
+variable "primary_bucket_id" {
+  description = "ID of the primary S3 bucket"
+  type        = string
+}
+
+variable "secondary_bucket_id" {
+  description = "ID of the secondary S3 bucket"
+  type        = string
+}
+
+# EC2 VARIABLES
+variable "role_name" {
+  description = "Name prefix for the IAM role and instance profile"
+  type        = string
+  default     = "lamp-ec2"
+}
+
+variable "region" {
+  description = "AWS region for resource ARNs"
+  type        = string
+ 
+}
+variable "db_password_ssm_param" {
+  description = "SSM parameter path where DB password is stored"
+  type        = string
+}
+
+variable "secondary_region" {
+  description = "Secondary AWS region for resources"
+  type        = string
+  
+}
+
+variable "account_id" {
+   description = "AWS account ID"
+    type        = string  
+}
+
+
+==== ./modules/primary_monitoring/main.tf ====
+terraform {
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = "~> 5.0"
+    }
+  }
+}
+
+resource "aws_sns_topic" "failover" {
+  
+  name     = "failover-topic"
+}
+
+resource "aws_sns_topic_policy" "allow_eventbridge" {
+  
+  arn      = aws_sns_topic.failover.arn
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect    = "Allow"
+        Principal = { Service = "events.amazonaws.com" }
+        Action    = "sns:Publish"
+        Resource  = aws_sns_topic.failover.arn
+      }
+    ]
+  })
+}
+
+resource "aws_cloudwatch_metric_alarm" "primary_alb_unhealthy" {
+  
+  alarm_name          = "primary-alb-unhealthy"
+  comparison_operator = "LessThanOrEqualToThreshold"
+  evaluation_periods  = 1
+  metric_name         = "HealthyHostCount"
+  namespace           = "AWS/ApplicationELB"
+  period              = 300
+  statistic           = "Minimum"
+  threshold           = 0
+  alarm_description   = "Alarm when no healthy hosts are available in primary ALB"
+  dimensions = {
+    TargetGroup  = var.primary_target_group_arn
+    LoadBalancer = var.primary_alb_arn
+  }
+  alarm_actions = [aws_sns_topic.failover.arn]
+}
+
+resource "aws_cloudwatch_event_rule" "rds_failure" {
+  
+  name        = "rds-failure"
+  description = "Capture RDS failure events"
+  event_pattern = jsonencode({
+    "source"      : ["aws.rds"],
+    "detail-type" : ["RDS DB Instance Event"],
+    "detail"      : {
+      "EventCategories" : ["failure"]
+    }
+  })
+}
+
+resource "aws_cloudwatch_event_target" "rds_to_sns" {
+  
+  rule      = aws_cloudwatch_event_rule.rds_failure.name
+  target_id = "sendToSNS"
+  arn       = aws_sns_topic.failover.arn
+}
+
+
+
+==== ./modules/primary_monitoring/outputs.tf ====
+output "sns_topic_arn" {
+  description = "ARN of the SNS failover topic"
+  value       = aws_sns_topic.failover.arn
+}
+
+output "alarm_name" {
+  description = "Name of the ALB health alarm"
+  value       = aws_cloudwatch_metric_alarm.primary_alb_unhealthy.alarm_name
+}
+
+
+
+==== ./modules/primary_monitoring/variables.tf ====
+variable "primary_region" {
+  type        = string
+  description = "Primary AWS region"
+}
+
+variable "primary_alb_arn" {
+  type        = string
+  description = "ARN of the primary Application Load Balancer"
+}
+
+variable "primary_target_group_arn" {
+  type        = string
+  description = "ARN of the primary ALB Target Group"
+}
+
+
+
+==== ./modules/rds/data_ssm.tf ====
+data "aws_ssm_parameter" "db_master" {
+  name            = aws_ssm_parameter.db_master_password.name
+  with_decryption = true
+}
+
+
+
+
+==== ./modules/rds/main.tf ====
+terraform {
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = "~> 5.0"
+    }
+  }
+}
+
+resource "aws_db_subnet_group" "db" {
+  name       = "lamp-db-subnet-group"
+  subnet_ids = var.subnet_ids
+  tags = {
+    Name = "lamp-db-subnet-group"
+  }
+}
+
+resource "aws_db_instance" "db" {
+  identifier             = "lamp-db"
+  engine                 = "mysql"
+  engine_version         = "8.0"
+  instance_class         = "db.t3.micro"
+  allocated_storage      = 10
+  db_name                = var.db_name
+  username               = var.db_username
+  password               = data.aws_ssm_parameter.db_master.value
+  vpc_security_group_ids = [var.security_group_id]
+  db_subnet_group_name   = aws_db_subnet_group.db.name
+  multi_az               = var.multi_az
+  skip_final_snapshot    = true
+  tags = {
+    Name = "lamp-db"
+  }
+}
+
+
+==== ./modules/rds/outputs.tf ====
+output "db_endpoint" {
+  value = split(":", aws_db_instance.db.endpoint)[0]
+}
+
+output "main_db_arn" {
+  description = "ARN of the main DB instance"
+  value       = aws_db_instance.db.arn
+}
+
+output "db_master_ssm_name" {
+  description = "SSM Parameter name for the DB master password"
+  value       = aws_ssm_parameter.db_master_password.name
+  sensitive   = true
+}
+
+
+
+
+==== ./modules/rds/random_password.tf ====
+resource "random_password" "master" {
+  length           = 16
+  override_special = "!@#_"
+}
+
+resource "aws_ssm_parameter" "db_master_password" {
+  name        = var.db_password_ssm_param
+  description = "Master password for Lamp RDS DB (primary)"
+  type        = "SecureString"
+  value       = random_password.master.result
+  tags = {
+    Name        = "lamp-rds-password"
+    Environment = "DisasterRecovery"
+    Project     = "LaravelApp"
+  }
+}
+
+
+==== ./modules/rds/variables.tf ====
+variable "vpc_id" { type = string }
+variable "subnet_ids" { type = list(string) }
+variable "security_group_id" { type = string }
+variable "db_name" { type = string }
+variable "db_username" { type = string }
+variable "multi_az" { type = bool }
+variable "db_password_ssm_param" { type = string }
+
+
+==== ./modules/s3/main.tf ====
+# aws s3api get-public-access-block --bucket my-laravel-secondary-bucket-2025  --region us-west-2
+# aws s3 rm s3://my-laravel-secondary-bucket-202fdfd5 --recursive --region us-west-2  
+
+terraform {
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = "~> 5.0"
+      configuration_aliases = [aws, aws.secondary]
+    }
+  }
+}
+# Primary S3 Bucket Configuration
+resource "aws_s3_bucket" "primary" {
+  provider = aws
+  bucket = var.primary_bucket_name
+
+  tags = {
+    Name        = "PrimaryS3Bucket"
+    Environment = "DisasterRecovery"
+    Project     = "LaravelApp"
+    Region      = "us-east-1"
+  }
+}
+
+resource "aws_s3_bucket_versioning" "primary_versioning" {
+  bucket = aws_s3_bucket.primary.id
+  versioning_configuration {
+    status = "Enabled"
+  }
+}
+
+resource "aws_s3_bucket_lifecycle_configuration" "primary_lifecycle" {
+  bucket = aws_s3_bucket.primary.id
+  rule {
+    id     = "archive-and-delete"
+    status = "Enabled"
+    filter {}
+    transition {
+      days          = 30
+      storage_class = "GLACIER"
+    }
+    expiration {
+      days = 365
+    }
+  }
+}
+
+resource "aws_s3_bucket_public_access_block" "primary_public_access" {
+  bucket                  = aws_s3_bucket.primary.id
+  block_public_acls       = true  # Changed from false
+  block_public_policy     = true  # Changed from false
+  ignore_public_acls      = true  # Changed from false
+  restrict_public_buckets = true  # Changed from false
+}
+
+# Secondary S3 Bucket Configuration
+resource "aws_s3_bucket" "secondary" {
+  provider = aws.secondary
+  bucket   = var.secondary_bucket_name
+
+  tags = {
+    Name        = "SecondaryS3Bucket"
+    Environment = "DisasterRecovery"
+    Project     = "LaravelApp"
+    Region      = "us-west-2"
+  }
+}
+
+resource "aws_s3_bucket_versioning" "secondary_versioning" {
+  provider = aws.secondary
+  bucket   = aws_s3_bucket.secondary.id
+  versioning_configuration {
+    status = "Enabled"
+  }
+}
+
+resource "aws_s3_bucket_lifecycle_configuration" "secondary_lifecycle" {
+  provider = aws.secondary
+  bucket   = aws_s3_bucket.secondary.id
+  rule {
+    id     = "archive-and-delete"
+    status = "Enabled"
+    filter {}
+    transition {
+      days          = 30
+      storage_class = "GLACIER"
+    }
+    expiration {
+      days = 365
+    }
+  }
+}
+
+resource "aws_s3_bucket_public_access_block" "secondary_public_access" {
+  provider                = aws.secondary
+  bucket                  = aws_s3_bucket.secondary.id
+   block_public_acls       = true  # Changed from false
+  block_public_policy     = true  # Changed from false
+  ignore_public_acls      = true  # Changed from false
+  restrict_public_buckets = true  # Changed from false
+}
+
+
+
+
+resource "aws_s3_bucket_replication_configuration" "replication" {
+  bucket = aws_s3_bucket.primary.id
+  role   = var.replication_role_arn  # Must be exact ARN from module.iam.s3_replication_role_arn
+
+  rule {
+    id     = "full-crr-rule"
+    status = "Enabled"
+    
+    filter {}  # Replicate all objects
+    
+    destination {
+      bucket        = aws_s3_bucket.secondary.arn
+      storage_class = "STANDARD"
+    }
+
+    delete_marker_replication {
+      status = "Enabled"
+    }
+  }
+
+  depends_on = [
+    aws_s3_bucket_versioning.primary_versioning,
+    aws_s3_bucket_versioning.secondary_versioning
+  ]
+}
+
+
+==== ./modules/s3/outputs.tf ====
+data "aws_region" "primary_region" {}
+
+// grab the region for the secondary provider
+data "aws_region" "secondary_region" {
+  provider = aws.secondary
+}
+
+output "primary_bucket_name" {
+  description = "Name of the primary S3 bucket"
+  value       = aws_s3_bucket.primary.bucket
+}
+
+output "primary_bucket_arn" {
+  description = "ARN of the primary S3 bucket"
+  value       = aws_s3_bucket.primary.arn
+}
+
+output "primary_bucket_id" {
+  description = "ID of the primary S3 bucket"
+  value       = aws_s3_bucket.primary.id
+}
+
+output "secondary_bucket_name" {
+  description = "Name of the secondary S3 bucket"
+  value       = aws_s3_bucket.secondary.bucket
+}
+
+output "secondary_bucket_arn" {
+  description = "ARN of the secondary S3 bucket"
+  value       = aws_s3_bucket.secondary.arn
+}
+
+output "secondary_bucket_id" {
+  description = "ID of the secondary S3 bucket"
+  value       = aws_s3_bucket.secondary.id
+}
+
+output "primary_public_access" {
+  description = "Primary bucket public access block"
+  value       = aws_s3_bucket_public_access_block.primary_public_access
+}
+
+output "secondary_public_access" {
+  description = "Secondary bucket public access block"
+  value       = aws_s3_bucket_public_access_block.secondary_public_access
+}
+
+output "primary_bucket_url" {
+  description = "S3 URL for the primary bucket"
+  # value       = "s3://${aws_s3_bucket.primary.bucket}"
+    value       = "https://s3.${data.aws_region.primary_region.name}.amazonaws.com/${aws_s3_bucket.primary.bucket}"
+}
+
+// new: the region‑specific HTTP endpoint
+output "primary_bucket_endpoint" {
+  description = "Regional endpoint for the primary bucket"
+  # value       = aws_s3_bucket.primary.bucket_regional_domain_name
+  value       = "https://s3.${data.aws_region.primary_region.name}.amazonaws.com"
+}
+
+output "secondary_bucket_url" {
+  description = "S3 URL for the secondary bucket"
+  # value       = "s3://${aws_s3_bucket.secondary.bucket}"
+    value       = "https://s3.${data.aws_region.secondary_region.name}.amazonaws.com/${aws_s3_bucket.secondary.bucket}"
+
+}
+
+// new: the region‑specific HTTP endpoint
+output "secondary_bucket_endpoint" {
+  description = "Regional endpoint for the secondary bucket"
+  # value       = aws_s3_bucket.secondary.bucket_regional_domain_name
+    value       = "https://s3.${data.aws_region.secondary_region.name}.amazonaws.com"
+}
+
+
+==== ./modules/s3/variables.tf ====
+variable "primary_bucket_name" {
+  description = "Name of the primary S3 bucket"
+  type        = string
+}
+
+variable "secondary_bucket_name" {
+  description = "Name of the secondary S3 bucket"
+  type        = string
+}
+
+variable "replication_role_arn" {
+  description = "ARN of the IAM role for S3 replication"
+  type        = string
+}
+
+
+==== ./modules/secondary_failover/lambda_function.py ====
+import json
+import boto3
+import logging
+
+logger = logging.getLogger()
+logger.setLevel(logging.INFO)
+
+def lambda_handler(event, context):
+    try:
+        # Extract SNS message details
+        sns_message = event['Records'][0]['Sns']['Message']
+        message_details = json.loads(sns_message)
+        logger.info(f"Event details: {message_details}")
+
+        # Initialize AWS clients
+        asg_client = boto3.client('autoscaling', region_name='us-east-1')
+        rds_client = boto3.client('rds', region_name='us-east-1')
+
+        trigger_alb = False
+        trigger_rds = False
+
+        # Detect ALB health failure
+        if message_details.get('AlarmName') == 'primary-alb-unhealthy':
+            logger.info("Detected ALB failure")
+            trigger_alb = True
+
+        # Detect RDS event failure
+        if 'EventCategories' in message_details and 'failure' in message_details['EventCategories']:
+            logger.info("Detected RDS failure event")
+            trigger_rds = True
+
+        # If either fails, trigger both responses
+        if trigger_alb or trigger_rds:
+            # Scale up ASG
+            logger.info("Triggering EC2 failover...")
+            asg_client.update_auto_scaling_group(
+                AutoScalingGroupName='secondary-asg',
+                DesiredCapacity=2
+            )
+            logger.info("EC2 failover completed")
+
+            # Promote read replica
+            logger.info("Triggering RDS failover...")
+            rds_client.promote_read_replica(
+                DBInstanceIdentifier='secondary-rds-replica'
+            )
+            logger.info("RDS failover completed")
+        else:
+            logger.info("No valid failover condition met")
+
+    except Exception as e:
+        logger.error(f"Error during failover: {str(e)}")
+        raise
+
+    return {
+        'statusCode': 200,
+        'body': json.dumps('Failover logic executed (if needed)')
+    }
+
+
+
+==== ./modules/secondary_failover/main.tf ====
+terraform {
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = "~> 5.0"
+    }
+  }
+}
+
+# Zip the Lambda function code
+data "archive_file" "lambda_zip" {
+  type        = "zip"
+  source_file = "${path.module}/lambda_function.py"
+  output_path = "${path.module}/lambda_function.zip"
+}
+
+# Lambda Function
+resource "aws_lambda_function" "failover" {
+  filename      = data.archive_file.lambda_zip.output_path
+  function_name = "failover-handler"
+  role          = var.lambda_role_arn
+  handler       = "lambda_function.lambda_handler"
+  runtime       = "python3.9"
+  timeout       = 60
+  source_code_hash = data.archive_file.lambda_zip.output_base64sha256
+}
+
+# EventBridge Rule to listen for SNS notifications
+resource "aws_cloudwatch_event_rule" "failover_trigger" {
+  name        = "failover-trigger"
+  description = "Trigger failover Lambda on SNS Publish events"
+  event_pattern = jsonencode({
+    "source"      = ["aws.sns"]
+    "detail-type" = ["SNS Publish"]
+    "resources"   = [var.sns_topic_arn]
+  })
+}
+
+# EventBridge Target to invoke Lambda
+resource "aws_cloudwatch_event_target" "lambda" {
+  rule      = aws_cloudwatch_event_rule.failover_trigger.name
+  target_id = "failoverLambda"
+  arn       = aws_lambda_function.failover.arn
+}
+
+# Permission for EventBridge to invoke Lambda
+resource "aws_lambda_permission" "allow_eventbridge" {
+  statement_id  = "AllowExecutionFromEventBridge"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.failover.function_name
+  principal     = "events.amazonaws.com"
+  source_arn    = aws_cloudwatch_event_rule.failover_trigger.arn
+}
+
+
+==== ./modules/secondary_failover/variables.tf ====
+variable "secondary_region" {
+  type        = string
+  description = "Secondary AWS region for failover"
+}
+
+variable "sns_topic_arn" {
+  type        = string
+  description = "ARN of the SNS topic in the primary region"
+}
+
+variable "lambda_role_arn" {
+  type        = string
+  description = "ARN of the IAM role for the Lambda function"
+}
+
+
+==== ./modules/security_group/main.tf ====
+
+terraform {
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = "~> 5.0"
+    }
+  }
+}
+
+
+resource "aws_security_group" "alb_sg" {
+  name        = "lamp-alb-sg"
+  description = "Security group for ALB"
+  vpc_id      = var.vpc_id
+
+  ingress {
+    from_port   = 80
+    to_port     = 80
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = {
+    Name = "lamp-alb-sg"
+  }
+}
+
+resource "aws_security_group" "ec2_sg" {
+  name        = "lamp-ec2-sg"
+  description = "Security group for EC2 instance"
+  vpc_id      = var.vpc_id
+
+  ingress {
+    from_port       = 80
+    to_port         = 80
+    protocol        = "tcp"
+    security_groups = [aws_security_group.alb_sg.id]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = {
+    Name = "lamp-ec2-sg"
+  }
+}
+
+resource "aws_security_group" "rds_sg" {
+  name        = "lamp-rds-sg"
+  description = "Security group for RDS"
+  vpc_id      = var.vpc_id
+
+  ingress {
+    from_port       = 3306
+    to_port         = 3306
+    protocol        = "tcp"
+    security_groups = [aws_security_group.ec2_sg.id]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = {
+    Name = "lamp-rds-sg"
+  }
+}
+
+
+==== ./modules/security_group/outputs.tf ====
+output "alb_sg_id" {
+  value = aws_security_group.alb_sg.id
+}
+
+output "ec2_sg_id" {
+  value = aws_security_group.ec2_sg.id
+}
+
+output "rds_sg_id" {
+  value = aws_security_group.rds_sg.id
+}
+
+
+==== ./modules/security_group/variables.tf ====
+variable "vpc_id" {
+  type = string
+}
+
+
+==== ./modules/vpc/main.tf ====
+terraform {
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = "~> 5.0"
+    }
+  }
+}
+
+
+resource "aws_vpc" "main" {
+  cidr_block           = var.vpc_cidr
+  enable_dns_support   = true
+  enable_dns_hostnames = true
+  tags = {
+    Name = "lamp-vpc"
+  }
+}
+
+resource "aws_subnet" "public" {
+  count                   = length(var.public_subnet_cidrs)
+  vpc_id                  = aws_vpc.main.id
+  cidr_block              = var.public_subnet_cidrs[count.index]
+  availability_zone       = var.availability_zones[count.index]
+  map_public_ip_on_launch = true
+ 
+    tags = {
+       Name = "lamp-public-subnet-${var.availability_zones[count.index]}"
+
+    }
+  
+}
+
+resource "aws_subnet" "private" {
+  count             = length(var.private_subnet_cidrs)
+  vpc_id            = aws_vpc.main.id
+  cidr_block        = var.private_subnet_cidrs[count.index]
+  availability_zone = var.availability_zones[count.index]
+
+
+    tags = {
+        Name = "lamp-private-subnet-${var.availability_zones[count.index]}"
+
+    }
+  
+}
+
+resource "aws_internet_gateway" "igw" {
+  vpc_id = aws_vpc.main.id
+  tags = {
+    Name = "lamp-igw"
+  }
+}
+
+resource "aws_eip" "nat" {
+  count  = length(var.availability_zones)
+  domain = "vpc"
+}
+
+resource "aws_nat_gateway" "nat" {
+  count         = length(var.availability_zones)
+  allocation_id = aws_eip.nat[count.index].id
+  subnet_id     = aws_subnet.public[count.index].id
+  tags = {
+    Name = "lamp-nat-${var.availability_zones[count.index]}"
+  }
+}
+
+resource "aws_route_table" "public" {
+  vpc_id = aws_vpc.main.id
+  route {
+    cidr_block = "0.0.0.0/0"
+    gateway_id = aws_internet_gateway.igw.id
+  }
+  tags = {
+    Name = "lamp-public-rt"
+  }
+}
+
+resource "aws_route_table_association" "public" {
+  count          = length(var.public_subnet_cidrs)
+  subnet_id      = aws_subnet.public[count.index].id
+  route_table_id = aws_route_table.public.id
+}
+
+resource "aws_route_table" "private" {
+  count  = length(var.availability_zones)
+  vpc_id = aws_vpc.main.id
+  route {
+    cidr_block     = "0.0.0.0/0"
+    nat_gateway_id = aws_nat_gateway.nat[count.index].id
+  }
+  tags = {
+    Name = "lamp-private-rt-${var.availability_zones[count.index]}"
+  }
+}
+
+resource "aws_route_table_association" "private" {
+  count          = length(var.private_subnet_cidrs)
+  subnet_id      = aws_subnet.private[count.index].id
+  route_table_id = aws_route_table.private[count.index].id
+}
+
+
+==== ./modules/vpc/outputs.tf ====
+# modules/vpc/outputs.tf
+output "vpc_id" {
+  description = "ID of the VPC"
+  value       = aws_vpc.main.id
+}
+
+output "private_subnet_ids" {
+  description = "List of private subnet IDs"
+  value       = aws_subnet.private[*].id
+}
+
+output "public_subnet_ids" {
+  description = "List of public subnet IDs"
+  value       = aws_subnet.public[*].id
+}
+
+
+==== ./modules/vpc/variables.tf ====
+variable "vpc_cidr" {
+  description = "CIDR block for the VPC"
+  type        = string
+}
+
+variable "public_subnet_cidrs" {
+  description = "List of CIDR blocks for public subnets"
+  type        = list(string)
+}
+
+variable "private_subnet_cidrs" {
+  description = "List of CIDR blocks for private subnets"
+  type        = list(string)
+}
+
+variable "availability_zones" {
+  description = "List of availability zones"
+  type        = list(string)
+}
+
+
+
+
+
+==== ./outputs.tf ====
+# output "primary_bucket_name" {
+#   description = "Name of the primary S3 bucket"
+#   value       = module.s3.primary_bucket_name
+# }
+
+# output "secondary_bucket_name" {
+#   description = "Name of the secondary S3 bucket"
+#   value       = module.s3.secondary_bucket_name
+# }
+
+# output "s3_replication_role_arn" {
+#   description = "ARN of the IAM role for S3 replication"
+#   value       = module.iam.s3_replication_role_arn
+# }
+
+# output "laravel_app_role_arn" {
+#   description = "ARN of the IAM role for Laravel application"
+#   value       = module.iam.laravel_app_role_arn
+# }
+
+# output "laravel_instance_profile_name" {
+#   description = "Name of the IAM instance profile for Laravel application"
+#   value       = module.iam.laravel_instance_profile_name
+# }
+
+
+// root outputs.tf
+
+# output "AWS_BUCKET" {
+#   description = "Name of the S3 bucket"
+#   value       = module.s3.primary_bucket_name
+# }
+
+# output "AWS_URL" {
+#   description = "S3 URL to use (s3://…)"
+#   value       = module.s3.primary_bucket_url
+# }
+
+# output "AWS_ENDPOINT" {
+#   description = "HTTP endpoint for the bucket"
+#   value       = module.s3.primary_bucket_endpoint
+# }
+
+# output "AWS_SECONDARY_BUCKET" {
+#   description = "Secondary bucket name"
+#   value       = module.s3.secondary_bucket_name
+# }
+
+# output "AWS_SECONDARY_ENDPOINT" {
+#   description = "Secondary bucket HTTP endpoint"
+#   value       = module.s3.secondary_bucket_endpoint
+# }
+
+# output "AWS_SECONDARY_URL" {
+#   description = "Secondary bucket HTTP URL"
+#   value       = module.s3.secondary_bucket_url
+# }
+
+# #####
+
+
+# output "alb_dns_name" {
+#   description = "DNS name of the ALB"
+#   value       = module.alb.alb_dns_name
+# }
+
+# output "ec2_private_ip" {
+#   description = "Private IP of the EC2 instance"
+#   value       = module.ec2.ec2_private_ip
+# }
+
+# output "db_endpoint" {
+#   description = "RDS endpoint"
+#   value       = module.rds.db_endpoint
+# }
+
+
+==== ./providers.tf ====
+terraform {
+  required_version = ">= 1.5.0"
+
+  backend "s3" {
+    bucket         = "ali-amalitech-state-bucket"
+    key            = "terraform/terraform.tfstate"
+    region         = "eu-west-1"
+    encrypt        = true
+    use_lockfile = true #s3 versioning already enabled for s3 
+
+  }
+
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = "~> 5.0"
+    }
+  }
+}
+
+provider "aws" {
+  region = var.primary_region
+  
+}
+
+provider "aws" {
+  alias  = "secondary"
+  region = var.secondary_region
+  
+}
+
+
+
+
+
+==== ./README.MD ====
+1. cd into state-bootstrap directory and run `terraform init` and `terraform apply -auto-approve`
+
+
+==== ./state-bootstrap/main.tf ====
+provider "aws" {
+  region = var.state_bucket_region
+}
+
+resource "aws_s3_bucket" "terraform_state" {
+  bucket = var.state_bucket_name
+
+  tags = {
+    Name        = "TerraformStateBucket"
+    Environment = "DisasterRecovery"
+    Project     = "LaravelApp"
+  }
+}
+
+resource "aws_s3_bucket_versioning" "state_versioning" {
+  bucket = aws_s3_bucket.terraform_state.id
+  versioning_configuration {
+    status = "Enabled"
+  }
+}
+
+resource "aws_s3_bucket_server_side_encryption_configuration" "state_encryption" {
+  bucket = aws_s3_bucket.terraform_state.id
+
+  rule {
+    apply_server_side_encryption_by_default {
+      sse_algorithm = "AES256"
+    }
+  }
+}
+
+resource "aws_s3_bucket_public_access_block" "state_public_access" {
+  bucket                  = aws_s3_bucket.terraform_state.id
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
+
+
+
+==== ./state-bootstrap/variables.tf ====
+variable "state_bucket_name" {
+  description = "Name of the S3 bucket for Terraform state"
+  type        = string
+  default     = "ali-amalitech-state-bucket"
+}
+
+variable "state_bucket_region" {
+  description = "AWS region for the Terraform state bucket"
+  type        = string
+  default     = "eu-west-1"
+}
+
+
+
+
+==== ./variables.tf ====
+variable "primary_region" {
+  description = "AWS region for the primary resources"
+  type        = string
+}
+
+variable "secondary_region" {
+  description = "AWS region for the secondary resources"
+  type        = string
+}
+
+variable "primary_bucket_name" {
+  description = "Name of the primary S3 bucket"
+  type        = string
+}
+
+variable "secondary_bucket_name" {
+  description = "Name of the secondary S3 bucket"
+  type        = string
+}
+
+variable "replication_role_name" {
+  description = "Name of the IAM role for S3 replication"
+  type        = string
+  default     = "s3-replication-role"
+}
+
+variable "laravel_role_name" {
+  description = "Name of the IAM role for Laravel application"
+  type        = string
+  default     = "laravel-app-role"
+}
+
+
+# VPC CONFIGURATION VARIABLES(PRIMARY REGION)
+
+variable "vpc_cidr" {
+  description = "VPC CIDR block"
+  type        = string
+  default     = "10.0.0.0/16"
+}
+
+variable "public_subnet_cidrs" {
+  description = "List of public subnet CIDR blocks"
+  type        = list(string)
+  default     = ["10.0.1.0/24"]
+}
+
+variable "private_subnet_cidrs" {
+  description = "List of private subnet CIDR blocks"
+  type        = list(string)
+  default     = ["10.0.3.0/24"]
+}
+
+variable "availability_zones" {
+  description = "List of availability zones"
+  type        = list(string)
+  default     = ["eu-west-1a"]
+}
+
+# VPC CONFIGURATION VARIABLES(SECONDARY REGION)
+
+variable "vpc_secondary_cidr" {
+  description = "VPC CIDR block"
+  type        = string
+  default     = "10.1.0.0/16"
+}
+
+variable "public_secondary_subnet_cidrs" {
+  description = "List of public subnet CIDR blocks"
+  type        = list(string)
+  default     = ["10.1.1.0/24"]
+}
+
+variable "private_secondary_subnet_cidrs" {
+  description = "List of private subnet CIDR blocks"
+  type        = list(string)
+  default     = ["10.1.3.0/24"]
+}
+
+variable "availability_zones_secondary" {
+  description = "List of availability zones"
+  type        = list(string)
+  default     = ["us-east-1a"]
+}
+
+
+# DB CONFIGURATION VARIABLES
+variable "db_name" {
+  description = "Database name"
+  type        = string
+}
+
+variable "db_username" {
+  description = "Database username"
+  type        = string
+
+}
+
+variable "db_password_ssm_param" {
+  type = string
+}
+
+variable "desired_capacity" {
+  type = number
+
+}
+
+
+variable "secondary_desired_capacity" {
+  type = number
+  
+}
+
+# others
+variable "account_id" {
+   description = "AWS account ID"
+    type        = string  
+}
+
+variable "repository_name" {
+  description = "Name of the ECR repository"
+  type        = string
+
+}
+
+
+
+
+variable "health_check_path" {
+  description = "Path for HealthCheck"
+  type        = string
+
+}
+
+

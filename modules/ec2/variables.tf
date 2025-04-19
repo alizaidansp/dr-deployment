@@ -68,3 +68,13 @@ variable "account_id" {
 variable "desired_capacity" {
   type = number
 }
+
+
+
+variable "primary_asg_name" {
+  type = string
+}
+
+variable "secondary_asg_name" {
+  type = string
+}

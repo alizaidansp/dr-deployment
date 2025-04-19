@@ -6,12 +6,13 @@ terraform {
     aws = {
       source  = "hashicorp/aws"
       version = "~> 5.0"
+      configuration_aliases = [aws, aws.secondary]
     }
   }
 }
-
 # Primary S3 Bucket Configuration
 resource "aws_s3_bucket" "primary" {
+  provider = aws
   bucket = var.primary_bucket_name
 
   tags = {

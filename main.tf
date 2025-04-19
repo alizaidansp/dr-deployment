@@ -35,6 +35,7 @@ module "vpc" {
   availability_zones   = var.availability_zones
 }
 
+
 module "vpc_secondary" {
   source              = "./modules/vpc"
   providers = {
@@ -60,7 +61,7 @@ module "security_group_secondary" {
   vpc_id    = module.vpc_secondary.vpc_id
 }
 
-# RDS Module
+# RDS Module (Primary Region)
 module "rds" {
   source            = "./modules/rds"
   vpc_id            = module.vpc.vpc_id
@@ -70,11 +71,30 @@ module "rds" {
   db_username       = var.db_username
   multi_az          = false
   db_password_ssm_param = var.db_password_ssm_param
-  
 }
 
-# RDS Read Replica [subnet-group]
+# Replicate the Password to Secondary Region's SSM
+# Replicate the Password to Secondary Region's SSM
+resource "aws_ssm_parameter" "db_master_password_secondary" {
+  provider    = aws.secondary
+  name        = var.db_password_ssm_param
+  description = "Master password for Lamp RDS DB (secondary)"
+  type        = "SecureString"
+  value       = data.aws_ssm_parameter.db_master.value # Use primary password
+  tags = {
+    Name        = "lamp-rds-password"
+    Environment = "DisasterRecovery"
+    Project     = "LaravelApp"
+  }
+}
 
+data "aws_ssm_parameter" "db_master" {
+  name            = module.rds.db_master_ssm_name
+  with_decryption = true
+  depends_on      = [module.rds] # Ensure RDS module is applied first
+}
+
+# RDS Read Replica Subnet Group (Secondary Region)
 resource "aws_db_subnet_group" "replica" {
   provider   = aws.secondary
   name       = "lamp-db-subnet-group-replica"
@@ -84,11 +104,11 @@ resource "aws_db_subnet_group" "replica" {
   }
 }
 
-# RDS Read Replica [instance]
+# RDS Read Replica (Secondary Region)
 resource "aws_db_instance" "replica" {
   provider             = aws.secondary
-  identifier           = "lamp-db-replica"
-  replicate_source_db  = module.rds.main_db_arn  # Primary DB ARN from eu-west-1
+  identifier           = var.replica_db_identifier
+  replicate_source_db  = module.rds.main_db_arn
   instance_class       = "db.t3.micro"
   db_subnet_group_name = aws_db_subnet_group.replica.name
   vpc_security_group_ids = [module.security_group_secondary.rds_sg_id]
@@ -96,6 +116,11 @@ resource "aws_db_instance" "replica" {
   tags = {
     Name = "lamp-db-replica"
   }
+}
+
+# Output for Replica Endpoint
+output "replica_endpoint" {
+  value = split(":", aws_db_instance.replica.endpoint)[0]
 }
 
 # S3 Module
@@ -112,11 +137,12 @@ module "s3" {
 
 # # IAM Module
 module "iam" {
+ 
+  source    = "./modules/iam"
   providers = {
     aws           = aws
     aws.secondary = aws.secondary
   }
-  source    = "./modules/iam"
   replication_role_name = var.replication_role_name
   primary_bucket_arn  = module.s3.primary_bucket_arn
   secondary_bucket_arn = module.s3.secondary_bucket_arn
@@ -172,6 +198,8 @@ module "ec2" {
   account_id = var.account_id
   ecr_repo_url = module.ecr.primary_repository_url
   desired_capacity=var.desired_capacity
+  primary_asg_name = var.primary_asg_name
+  secondary_asg_name = var.secondary_asg_name
 }
 
 
@@ -195,18 +223,94 @@ module "ec2_secondary" {
   desired_capacity    = var.secondary_desired_capacity
   account_id = var.account_id
   ecr_repo_url = module.ecr.secondary_repository_url
+  primary_asg_name = var.primary_asg_name
+  secondary_asg_name = var.secondary_asg_name
 }
 
 
 
-module "lambda" {
-  source           = "./modules/lambda"
+# failover implementation #STAORT
+
+# Primary Monitoring Module
+module "primary_monitoring" {
+  source                  = "./modules/primary_monitoring"
+  
+  primary_region          = var.primary_region
+  primary_alb_arn         = module.alb.alb_arn
+  primary_target_group_arn = module.alb.target_group_arn
+}
+
+# Forward SNS events to secondary region
+data "aws_caller_identity" "current" {}
+
+resource "aws_cloudwatch_event_rule" "forward_sns_to_secondary" {
+
+  name        = "forward-sns-to-secondary"
+  description = "Forward SNS Publish events to secondary region"
+  event_pattern = jsonencode({
+    "source"      = ["aws.sns"]
+    "detail-type" = ["SNS Publish"]
+    "resources"   = [module.primary_monitoring.sns_topic_arn]
+  })
+}
+
+resource "aws_cloudwatch_event_target" "secondary_bus" {
+  
+  rule      = aws_cloudwatch_event_rule.forward_sns_to_secondary.name
+  target_id = "secondaryEventBus"
+  arn       = "arn:aws:events:${var.secondary_region}:${data.aws_caller_identity.current.account_id}:event-bus/default"
+}
+
+# Secondary Failover Module
+module "secondary_failover" {
+  source = "./modules/secondary_failover"
   providers = {
-    aws.secondary = aws.secondary
+    aws = aws.secondary
   }
-  function_name    = "failover-function"
-  runtime          = "python3.8"
-  lambda_role_arn  = module.iam.failover_lambda_role.arn
-  handler          = "switch_to_secondary.lambda_handler"
-  lambda_zip_path  = "failover_lambda/lambda_function.zip"
+  secondary_region = var.secondary_region
+  sns_topic_arn   = module.primary_monitoring.sns_topic_arn
+  lambda_role_arn = module.iam.failover_lambda_role_arn
+lambda_environment_variables = {
+    SECONDARY_ASG_NAME = var.secondary_asg_name
+    SECONDARY_RDS_ID   = var.replica_db_identifier
+
+  }
 }
+# failover implementation #END
+
+# 1. **Primary Monitoring Module**  
+#    - **Alarms & EventBridge**  
+#      - Creates an SNS topic (`failover-topic`).  
+#      - Raises a CloudWatch Alarm if the primary ALB has 0 healthy hosts.  
+#      - Captures any RDS “failure” event via an EventBridge rule.  
+#      - Both conditions publish to the SNS topic.  
+#    - **Output**  
+#      - Exposes `sns_topic_arn` so other modules can subscribe to it.
+
+# 2. **Root Configuration (main.tf)**  
+#    - **Calls `primary_monitoring`** to stand up those alarms and topic in **`primary_region`**.  
+#    - **Forwarding Rule**  
+#      - An EventBridge rule listens for **SNS Publish** events on that topic.  
+#      - Its target is the **default event bus** in the **secondary region**, so every SNS notification is forwarded cross‑region.
+
+# 3. **Secondary Failover Module**  
+#    - **Provider Alias**  
+#      - Uses the `aws.secondary` provider pointing at `secondary_region`.  
+#    - **Lambda Setup**  
+#      - Packages and deploys `lambda_function.py` which, on invocation,  
+#        1. Scales up the secondary ASG  
+#        2. Promotes the secondary RDS replica  
+#    - **Trigger**  
+#      - An EventBridge rule in the secondary region watches for SNS Publish events (forwarded by the root).  
+#      - When it sees one, it invokes the Lambda.
+
+# ---
+
+# ### 📈 Failure Flow
+
+# 1. **Primary ALB or RDS fails** → publishes to SNS in primary.  
+# 2. SNS → EventBridge rule in **primary** publishes to **secondary** event bus.  
+# 3. **Secondary** EventBridge sees the forwarded event → invokes failover Lambda.  
+# 4. Lambda brings up EC2 capacity **and** promotes the read‑replica, synchronously.
+
+# This guarantees that **any** primary‑side failure (ALB or RDS) always triggers **both** EC2 scaling and RDS promotion in the secondary region.
