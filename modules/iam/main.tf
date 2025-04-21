@@ -213,7 +213,12 @@ resource "aws_iam_role_policy" "failover_lambda_policy" {
     Version = "2012-10-17"
     Statement = [
       {
-        Action   = [ "rds:ModifyDBInstance","rds:PromoteReadReplica", "rds:DescribeDBInstances"]
+        Action   = [
+           "rds:ModifyDBInstance",
+           "rds:PromoteReadReplica", 
+           "rds:DescribeDBInstances",
+          "rds:CreateDBSnapshot",
+        ]
         Effect   = "Allow"
         Resource = "*"
       },

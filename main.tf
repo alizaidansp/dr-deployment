@@ -230,12 +230,11 @@ module "ec2_secondary" {
   secondary_asg_name = var.secondary_asg_name
 }
 
-# Output for Replica Endpoint
-# output "replica_endpoint" {
-#   value = split(":", aws_db_instance.replica.endpoint)[0]
-# }
 
 
+
+
+# Primary Monitoring Module
 module "primary_monitoring" {
   source                  = "./modules/primary_monitoring"
   
@@ -268,4 +267,17 @@ lambda_environment_variables = {
     SECONDARY_REGION             = var.secondary_region
     PRIMARY_REGION         = var.primary_region
   }
+}
+
+# Lambda Function for Snapshot Creation
+module "manual_snapshot" {
+  source = "./modules/manual_snapshot"
+  providers = {
+    aws = aws.secondary
+  }
+  region = var.secondary_region
+  rds_instance_identifier = var.replica_db_identifier
+  schedule_expression = "cron(0 2 * * ? *)" #run every day at 2am
+  # schedule_expression = "cron(15 19 * * ? *)" # Was used for testing
+  lambda_role_arn = module.iam.failover_lambda_role_arn
 }
