@@ -229,7 +229,7 @@ resource "aws_iam_role_policy" "failover_lambda_policy" {
         "logs:PutLogEvents"
       ],
       "Effect": "Allow",
-      "Resource": "arn:aws:logs:*:*:*"
+      "Resource": "*"
     }
   
     ]
@@ -237,49 +237,3 @@ resource "aws_iam_role_policy" "failover_lambda_policy" {
 }
 
 
-# IAM Role for EventBridge Cross-Region Event Forwarding
-resource "aws_iam_role" "eventbridge_cross_region" {
-  name = "eventbridge-cross-region-role"
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Action = "sts:AssumeRole"
-        Effect = "Allow"
-        Principal = {
-          Service = "events.amazonaws.com"
-        }
-      }
-    ]
-  })
-  tags = {
-    Name        = "EventBridgeCrossRegionRole"
-    Environment = "DisasterRecovery"
-    Project     = "LaravelApp"
-  }
-}
-
-resource "aws_iam_role_policy" "eventbridge_cross_region_policy" {
-  role = aws_iam_role.eventbridge_cross_region.id
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Action = [
-          "events:PutEvents"
-        ]
-        Effect   = "Allow"
-        Resource = "arn:aws:events:${var.secondary_region}:${data.aws_caller_identity.current.account_id}:event-bus/default"
-      }
-    ]
-  })
-}
-
-# Allow primary region to send events to secondary region's event bus
-resource "aws_cloudwatch_event_permission" "cross_region" {
-  provider     = aws.secondary
-  principal    = var.account_id
-  action       = "events:PutEvents"
-  event_bus_name = "default"
-  statement_id   = "AllowCrossRegionPutEvents"
-}

@@ -16,7 +16,7 @@ resource "aws_db_subnet_group" "db" {
 }
 
 resource "aws_db_instance" "db" {
-  identifier             = "lamp-db"
+  identifier             = var.main_db_identifier
   engine                 = "mysql"
   engine_version         = "8.0"
   instance_class         = "db.t3.micro"
@@ -30,6 +30,6 @@ resource "aws_db_instance" "db" {
   skip_final_snapshot    = true
   backup_retention_period = 1 # Enable automated backups (1 day retention)
   tags = {
-    Name = "lamp-db"
+    Name = var.main_db_identifier
   }
 }

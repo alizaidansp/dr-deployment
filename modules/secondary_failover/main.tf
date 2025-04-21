@@ -29,29 +29,32 @@ resource "aws_lambda_function" "failover" {
   }
 }
 
-# EventBridge Rule to listen for SNS notifications
-resource "aws_cloudwatch_event_rule" "failover_trigger" {
-  name        = "failover-trigger"
-  description = "Trigger failover Lambda on SNS Publish events"
-  event_pattern = jsonencode({
-    "source"      = ["aws.sns"]
-    "detail-type" = ["SNS Topic Notification"]
-    "resources"   = [var.sns_topic_arn]
-  })
+
+# EventBridge Rule to Schedule Lambda Every Minute
+resource "aws_cloudwatch_event_rule" "health_check_schedule" {
+  name                = "health_check_schedule"
+  description         = "Run health check every minute"
+  schedule_expression = "rate(2 minutes)"
+  # schedule_expression = "rate(1 hour)"
+# 
 }
 
-# EventBridge Target to invoke Lambda
-resource "aws_cloudwatch_event_target" "lambda" {
-  rule      = aws_cloudwatch_event_rule.failover_trigger.name
-  target_id = "failoverLambda"
+resource "aws_cloudwatch_event_target" "failover_lambda" {
+  rule      = aws_cloudwatch_event_rule.health_check_schedule.name
+  target_id = "failover_lambda"
   arn       = aws_lambda_function.failover.arn
 }
 
-# Permission for EventBridge to invoke Lambda
+# Permission for EventBridge to Invoke Lambda
 resource "aws_lambda_permission" "allow_eventbridge" {
   statement_id  = "AllowExecutionFromEventBridge"
   action        = "lambda:InvokeFunction"
   function_name = aws_lambda_function.failover.function_name
   principal     = "events.amazonaws.com"
-  source_arn    = aws_cloudwatch_event_rule.failover_trigger.arn
+  source_arn    = aws_cloudwatch_event_rule.health_check_schedule.arn
+}
+
+# Outputs
+output "failover_lambda_name" {
+  value = aws_lambda_function.failover.function_name
 }

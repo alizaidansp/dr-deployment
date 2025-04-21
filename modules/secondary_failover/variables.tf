@@ -3,10 +3,7 @@ variable "secondary_region" {
   description = "Secondary AWS region for failover"
 }
 
-variable "sns_topic_arn" {
-  type        = string
-  description = "ARN of the SNS topic in the primary region"
-}
+
 
 variable "lambda_role_arn" {
   type        = string

@@ -19,43 +19,12 @@ resource "aws_sns_topic_subscription" "test_subscription" {
 }
 
 
-# SNS topic policy to allow EventBridge and CloudWatch to publish/subscribe
-resource "aws_sns_topic_policy" "allow_eventbridge" {
-  
-  arn      = aws_sns_topic.failover.arn
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
 
-        Sid    = "AllowEventBridgePublish"
-        Effect    = "Allow"
-        Principal = { Service = "events.amazonaws.com" }
-        Action = [
-          "SNS:Publish",
-          "SNS:Subscribe",
-          "SNS:Receive"
-        ]
-        Resource  = aws_sns_topic.failover.arn
-      },{
-
-        Sid    = "AllowCloudWatchPublish"
-        Effect = "Allow"
-        Principal = {
-          Service = "cloudwatch.amazonaws.com"
-        }
-        Action = "SNS:Publish"
-        Resource = aws_sns_topic.failover.arn
-      }
-    ]
-  })
-}
 
 resource "aws_cloudwatch_metric_alarm" "primary_alb_unhealthy" {
   
   alarm_name          = "primary-alb-unhealthy"
   comparison_operator = "LessThanOrEqualToThreshold"
-  # comparison_operator = "GreaterThanThreshold"
 
   evaluation_periods  = 1
   metric_name         = "HealthyHostCount"
@@ -80,7 +49,7 @@ resource "aws_cloudwatch_event_rule" "rds_failure" {
     "source"      : ["aws.rds"],
     "detail-type" : ["RDS DB Instance Event"],
     "detail"      : {
-        EventCategories = [ "failure", "availability", "notification" ]
+        EventCategories = [ "failure", "availability", ]
     }
   })
 }

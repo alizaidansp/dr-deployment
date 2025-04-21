@@ -135,3 +135,13 @@ variable "replica_db_identifier" {
   
 }
 
+variable "main_db_identifier" {
+  type = string
+  
+}
+
+
+variable "expected_status_codes" {
+  type    = list(number)
+  default = [200]
+}
