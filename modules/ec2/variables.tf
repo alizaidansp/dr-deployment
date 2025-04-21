@@ -78,3 +78,8 @@ variable "primary_asg_name" {
 variable "secondary_asg_name" {
   type = string
 }
+
+variable "min_size" {
+  type = number
+  
+}

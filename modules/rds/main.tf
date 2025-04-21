@@ -28,6 +28,7 @@ resource "aws_db_instance" "db" {
   db_subnet_group_name   = aws_db_subnet_group.db.name
   multi_az               = var.multi_az
   skip_final_snapshot    = true
+  backup_retention_period = 1 # Enable automated backups (1 day retention)
   tags = {
     Name = "lamp-db"
   }

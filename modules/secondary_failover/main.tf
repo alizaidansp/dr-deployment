@@ -35,7 +35,7 @@ resource "aws_cloudwatch_event_rule" "failover_trigger" {
   description = "Trigger failover Lambda on SNS Publish events"
   event_pattern = jsonencode({
     "source"      = ["aws.sns"]
-    "detail-type" = ["SNS Publish"]
+    "detail-type" = ["SNS Topic Notification"]
     "resources"   = [var.sns_topic_arn]
   })
 }

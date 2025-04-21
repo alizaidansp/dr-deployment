@@ -31,57 +31,50 @@ variable "laravel_role_name" {
 }
 
 
-# VPC CONFIGURATION VARIABLES(PRIMARY REGION)
+# PRIMARY REGION VPC CONFIGURATION VARIABLES
 
 variable "vpc_cidr" {
   description = "VPC CIDR block"
   type        = string
-  default     = "10.0.0.0/16"
 }
 
 variable "public_subnet_cidrs" {
   description = "List of public subnet CIDR blocks"
   type        = list(string)
-  default     = ["10.0.1.0/24"]
 }
 
 variable "private_subnet_cidrs" {
   description = "List of private subnet CIDR blocks"
   type        = list(string)
-  default     = ["10.0.3.0/24"]
 }
 
 variable "availability_zones" {
   description = "List of availability zones"
   type        = list(string)
-  default     = ["eu-west-1a"]
 }
 
-# VPC CONFIGURATION VARIABLES(SECONDARY REGION)
+# SECONDARY REGION VPC CONFIGURATION VARIABLES
 
 variable "vpc_secondary_cidr" {
-  description = "VPC CIDR block"
+  description = "Secondary VPC CIDR block"
   type        = string
-  default     = "10.1.0.0/16"
 }
 
 variable "public_secondary_subnet_cidrs" {
-  description = "List of public subnet CIDR blocks"
+  description = "List of public subnet CIDR blocks for secondary VPC"
   type        = list(string)
-  default     = ["10.1.1.0/24"]
 }
 
 variable "private_secondary_subnet_cidrs" {
-  description = "List of private subnet CIDR blocks"
+  description = "List of private subnet CIDR blocks for secondary VPC"
   type        = list(string)
-  default     = ["10.1.3.0/24"]
 }
 
 variable "availability_zones_secondary" {
-  description = "List of availability zones"
+  description = "List of availability zones for secondary region"
   type        = list(string)
-  default     = ["us-east-1a"]
 }
+
 
 
 # DB CONFIGURATION VARIABLES
@@ -141,3 +134,4 @@ variable "replica_db_identifier" {
   type = string
   
 }
+

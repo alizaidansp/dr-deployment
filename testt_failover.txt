@@ -1,0 +1,13 @@
+Testomg alb health
+
+1. Deregister targets from primary
+
+aws elbv2 deregister-targets \
+  --target-group-arn $(terraform output -raw primary_target_group_arn) \
+  --targets Id=i-05ae7d6336d6aebe0 \
+  --region eu-west-1
+
+2. Check target health of the primary alb [expect an alarm state!]
+aws elbv2 describe-target-health \                           ─╯
+  --target-group-arn $(terraform output -raw primary_target_group_arn) \
+  --region eu-west-1

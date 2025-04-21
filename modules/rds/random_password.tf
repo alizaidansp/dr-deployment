@@ -1,6 +1,6 @@
 resource "random_password" "master" {
   length           = 16
-  override_special = "!@#_"
+  override_special = "!#_"
 }
 
 resource "aws_ssm_parameter" "db_master_password" {

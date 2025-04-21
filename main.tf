@@ -113,6 +113,7 @@ resource "aws_db_instance" "replica" {
   db_subnet_group_name = aws_db_subnet_group.replica.name
   vpc_security_group_ids = [module.security_group_secondary.rds_sg_id]
   skip_final_snapshot  = true
+  backup_retention_period = 1 # Enable automated backups (1 day retention)
   tags = {
     Name = "lamp-db-replica"
   }
@@ -197,9 +198,11 @@ module "ec2" {
   aws_endpoint = module.s3.primary_bucket_endpoint
   account_id = var.account_id
   ecr_repo_url = module.ecr.primary_repository_url
-  desired_capacity=var.desired_capacity
   primary_asg_name = var.primary_asg_name
   secondary_asg_name = var.secondary_asg_name
+  desired_capacity=var.desired_capacity
+  min_size = 1
+
 }
 
 
@@ -209,6 +212,9 @@ module "ec2_secondary" {
   providers = {
     aws = aws.secondary
   }
+  min_size = 0
+  desired_capacity    = var.secondary_desired_capacity
+
   region              = var.secondary_region
   subnet_ids          = module.vpc_secondary.private_subnet_ids
   security_group_id   = module.security_group_secondary.ec2_sg_id
@@ -220,7 +226,6 @@ module "ec2_secondary" {
   aws_bucket          = module.s3.secondary_bucket_name
   aws_url             = module.s3.secondary_bucket_url
   aws_endpoint        = module.s3.secondary_bucket_endpoint
-  desired_capacity    = var.secondary_desired_capacity
   account_id = var.account_id
   ecr_repo_url = module.ecr.secondary_repository_url
   primary_asg_name = var.primary_asg_name
@@ -229,7 +234,7 @@ module "ec2_secondary" {
 
 
 
-# failover implementation #STAORT
+# failover implementation #START
 
 # Primary Monitoring Module
 module "primary_monitoring" {
@@ -238,6 +243,10 @@ module "primary_monitoring" {
   primary_region          = var.primary_region
   primary_alb_arn         = module.alb.alb_arn
   primary_target_group_arn = module.alb.target_group_arn
+  alb_arn         = module.alb.alb_arn
+  secondary_region         = var.secondary_region
+  account_id               = var.account_id
+
 }
 
 # Forward SNS events to secondary region
@@ -248,8 +257,8 @@ resource "aws_cloudwatch_event_rule" "forward_sns_to_secondary" {
   name        = "forward-sns-to-secondary"
   description = "Forward SNS Publish events to secondary region"
   event_pattern = jsonencode({
-    "source"      = ["aws.sns"]
-    "detail-type" = ["SNS Publish"]
+    "source"      = ["aws.sns"],
+    "detail-type" = ["SNS Topic Notification"],
     "resources"   = [module.primary_monitoring.sns_topic_arn]
   })
 }
@@ -259,6 +268,7 @@ resource "aws_cloudwatch_event_target" "secondary_bus" {
   rule      = aws_cloudwatch_event_rule.forward_sns_to_secondary.name
   target_id = "secondaryEventBus"
   arn       = "arn:aws:events:${var.secondary_region}:${data.aws_caller_identity.current.account_id}:event-bus/default"
+  role_arn       = module.iam.cross_region_eventbridge_role_arn
 }
 
 # Secondary Failover Module
