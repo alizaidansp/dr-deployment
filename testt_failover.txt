@@ -7,8 +7,5 @@ aws elbv2 deregister-targets \
   --targets Id=i-07b3a62cb90fc29c2 \
   --region eu-west-1
 
-2. Check target health of the primary alb [expect an alarm state!]
-aws elbv2 describe-target-health \                           ─╯
-  --target-group-arn $(terraform output -raw primary_target_group_arn) \
-  --region eu-west-1
+╰─ aws rds describe-db-snapshots --db-instance-identifier lamp-db-primary --region $(terraform output -raw primary_region)               ─╯
   

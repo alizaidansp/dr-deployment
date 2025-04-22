@@ -4,9 +4,8 @@
 #   echo "" >> output.txt
 # done )
 
-# secondary_region.tf
 
-# Global Accelerator COnfiguration
+# Global Accelerator Configuration
 module "global_accelerator" {
   source              = "./modules/global_accelerator"
   secondary_region =var.secondary_region
