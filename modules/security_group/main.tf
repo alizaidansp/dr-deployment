@@ -1,4 +1,3 @@
-
 terraform {
   required_providers {
     aws = {
@@ -7,6 +6,7 @@ terraform {
     }
   }
 }
+
 
 
 resource "aws_security_group" "alb_sg" {

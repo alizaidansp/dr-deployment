@@ -13,3 +13,14 @@ variable "account_id" {
   description = "AWS account ID"
   type        = string
 }
+variable "primary_region" {
+  type        = string
+  description = "AWS region for the primary resources (replication source)"
+  
+}
+
+variable "dockerfile_path" {
+  type        = string
+  description = "Path to the Dockerfile"
+  
+}

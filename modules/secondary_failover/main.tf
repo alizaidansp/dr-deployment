@@ -35,7 +35,6 @@ resource "aws_cloudwatch_event_rule" "health_check_schedule" {
   name                = "health_check_schedule"
   description         = "Run health check every minute"
   schedule_expression = "rate(10 minutes)" #system can be down for 10 minutes
-  # schedule_expression = "rate(1 hour)"
 # 
 }
 

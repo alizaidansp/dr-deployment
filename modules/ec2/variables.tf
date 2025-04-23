@@ -1,3 +1,8 @@
+variable "image_id" {
+  description = "AMI ID to use for the instances"
+  type        = string
+}
+
 variable "subnet_ids" {
   description = "List of subnet IDs for the Auto Scaling Group"
   type        = list(string)
