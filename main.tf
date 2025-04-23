@@ -5,6 +5,32 @@
 # done )
 
 
+# AMImodule
+module "ami" {
+   providers = {
+    aws.secondary = aws.secondary
+  }
+  source                   = "./modules/ami"
+  primary_region           = var.primary_region
+  primary_security_group_id = module.security_group.ec2_sg_id
+  primary_subnet_id        = module.vpc.private_subnet_ids[0]
+  iam_instance_profile     = module.iam.instance_profile_name
+}
+
+
+# ECR Configuration
+
+module "ecr" {
+  source           = "./modules/ecr"
+  repository_name  = var.repository_name
+  secondary_region = var.secondary_region  # us-east-1
+  account_id       = var.account_id
+  primary_region   = var.primary_region
+  dockerfile_path  = "${path.module}/../../ask-kstu-backend-v3"  # Correct path to directory
+ 
+}
+
+
 # Global Accelerator Configuration
 module "global_accelerator" {
   source              = "./modules/global_accelerator"
@@ -17,13 +43,6 @@ module "global_accelerator" {
 }
 
 
-# ECR Configuration
-module "ecr" {
-  source           = "./modules/ecr"
-  repository_name  = var.repository_name
-  secondary_region = var.secondary_region  # us-east-1
-  account_id       = var.account_id
-}
 
 # # VPC Module
 module "vpc" {
@@ -179,8 +198,9 @@ module "alb_secondary" {
   target_group_port = 80
   health_check_path=var.health_check_path
 }
-# # # EC2 Module
+# # # # EC2 Module
 module "ec2" {
+  image_id             = module.ami.primary_ami_id  # Use primary AMI ID
   source               = "./modules/ec2"
   region = var.primary_region
   subnet_ids           = module.vpc.private_subnet_ids
@@ -199,12 +219,14 @@ module "ec2" {
   secondary_asg_name = var.secondary_asg_name
   desired_capacity=var.desired_capacity
   min_size = 1
+  depends_on           = [module.ecr]
 
 }
 
 
-# EC2 Auto Scaling Group
+# # EC2 Auto Scaling Group
 module "ec2_secondary" {
+  image_id             = module.ami.secondary_ami_id  # Use secondary AMI ID
   source               = "./modules/ec2"
   providers = {
     aws = aws.secondary
@@ -227,7 +249,9 @@ module "ec2_secondary" {
   ecr_repo_url = module.ecr.secondary_repository_url
   primary_asg_name = var.primary_asg_name
   secondary_asg_name = var.secondary_asg_name
+  depends_on           = [module.ecr]
 }
+
 
 
 

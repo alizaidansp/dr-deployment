@@ -6,20 +6,11 @@ terraform {
     }
   }
 }
-data "aws_ami" "amazon_linux" {
-  most_recent = true
-  owners      = ["amazon"]
-  filter {
-    name   = "name"
-    values = ["amzn2-ami-hvm-*-x86_64-gp2"]
-  }
-}
 
 resource "aws_launch_template" "app" {
   name_prefix   = "lamp-app-"
-  image_id      = data.aws_ami.amazon_linux.id
+  image_id      = var.image_id
   instance_type = "t2.micro"
-  # key_name      = var.ssh_key_name
   iam_instance_profile {
     name = var.iam_instance_profile
   }
@@ -31,24 +22,25 @@ resource "aws_launch_template" "app" {
 
   user_data = base64encode(<<-EOF
   #!/bin/bash
+  
+  sudo systemctl enable docker    # Enable Docker to start on boot
+  sudo systemctl start docker     # Start the Docker service now
+
+
 
   # Set variables
   IMAGE=${var.ecr_repo_url}:latest
-  # IMAGE="183631301567.dkr.ecr.eu-west-1.amazonaws.com/lamp-app:latest"
   DB_PASSWORD=$(aws ssm get-parameter --name "/lamp/rds/master_password" --with-decryption --region ${var.region} --query 'Parameter.Value' --output text)
-
-  # Install and start Docker
-  yum update -y
-  amazon-linux-extras install docker -y
-  service docker start
-  usermod -a -G docker ec2-user
 
   # Login to ECR and pull image
   aws ecr get-login-password --region ${var.region} | docker login --username AWS --password-stdin ${var.ecr_repo_url}
   docker pull $IMAGE || echo "Pull failed" >> /var/log/user-data.log
 
+
   # Run container
   docker run -p 80:80 \
+   --name=lamp-app \
+  --restart=unless-stopped \
     -e APP_ENV=production \
     -e DB_HOST=${var.db_host} \
     -e DB_CONNECTION=mysql \

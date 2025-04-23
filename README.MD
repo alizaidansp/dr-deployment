@@ -6,7 +6,6 @@ This is a Disaster Recovery (DR) project utilizing Terraform to deploy a LAMP (L
 The project leverages a multi-region architecture with a **primary region** ( `eu-west-1`) hosting the active LAMP stack and a **secondary region** ( `us-east-1`) maintaining a minimal "pilot light" setup. This minimal environment can be quickly scaled up during a disaster to ensure business continuity. Terraform is used as the Infrastructure as Code (IaC) tool, enabling repeatable, version-controlled deployments across both regions. The solution includes automated failover mechanisms, data replication, and monitoring to meet the project’s goals of resilience and efficiency.
 
 ---
-
 ## Project Overview
 The DR Project AWS follows the Pilot Light strategy, where the secondary region maintains a reduced set of resources that can be activated swiftly during a disaster. The infrastructure is modularized using Terraform, with separate modules for each AWS service, ensuring maintainability and scalability. Below is an overview of the key components and their roles:
 
@@ -329,8 +328,8 @@ The flowchart below outlines the DR workflow:
 3. **Failover**: Scale secondary resources, promote RDS, update routing.
 4. **End**: Traffic routed to secondary region.
 
-**Screenshot Placeholder**:  
-[Insert `Flowchart.png` here for the complete DR workflow.]
+![Flowchart For DR](image_assets/Flowchart.png "Flowchart For DR") 
+
 
 ---
 
@@ -348,8 +347,9 @@ The flowchart below outlines the DR workflow:
   ```
 - **Failover Failures**: Check Lambda logs and CloudWatch alarms.
 
-**Screenshot Placeholder**:  
-[Insert `deregistering.png` here to show resource cleanup.]
+**Deregisterd Targets From Target Group**:
+![Deregisterd Targets From Target Group**:](image_assets/deregistering.png "Deregisterd Targets From Target Group**:") 
+
 
 ---
 
