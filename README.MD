@@ -24,11 +24,9 @@
    - [Scaling the Pilot Light](#2-scaling-the-pilot-light)
    - [Data Synchronization](#3-data-synchronization)
    - [Operational Testing](#4-operational-testing)
-   - [Post-Recovery Operations](#5-post-recovery-operations)
 6. [Maintenance and Monitoring](#maintenance-and-monitoring)
    - [Automated Backups](#automated-backups)
    - [CloudWatch Monitoring](#cloudwatch-monitoring)
-   - [Regular DR Drills](#regular-dr-drills)
 7. [Cost Considerations](#cost-considerations)
    - [Pilot Light Strategy Benefits](#pilot-light-strategy-benefits)
    - [Optimization Tips](#optimization-tips)
@@ -83,7 +81,7 @@ The overall architecture implements a cross-region disaster recovery solution wi
    - Defines roles and policies for S3 replication, EC2 instance profiles, and Lambda execution.
 
 9. **Monitoring**:
-   - Uses CloudWatch to monitor resource health and trigger failover when necessary.
+   - Uses CloudWatch to monitor resource health and trigger failover when necessary using ping strategy.
 
 10. **AMI (Amazon Machine Image)**:
     - Pre-configured AMI for consistent and rapid deployment of EC2 instances in both regions.
@@ -95,9 +93,8 @@ The project is organized as follows:
 ```
 .
 ├── bash_scripts
-│   ├── nuke.sh              # tear down all resources
+│   ├── nuke.sh              # tear down all networking resources
 │   └── state_file.sh        # manage Terraform state backend
-├── image_assets             # screenshots for docs
 ├── main.tf                  # root Terraform config
 ├── modules                  # reusable service modules
 │   ├── alb                  # ALB setup
@@ -106,7 +103,7 @@ The project is organized as follows:
 │   ├── ecr                  # ECR repo setup
 │   ├── global_accelerator   # Global Accelerator config
 │   ├── iam                  # IAM roles & policies
-│   ├── manual_snapshot      # on-demand RDS snapshots
+│   ├── manual_snapshot      # Lambda RDS snapshots 
 │   ├── primary_monitoring   # CloudWatch alarms for primary
 │   ├── rds                  # RDS & replica setup
 │   ├── s3                   # S3 buckets & replication
@@ -118,7 +115,6 @@ The project is organized as follows:
 ├── README.MD                # project overview & steps
 ├── state-bootstrap          # init remote state setup
 ├── terraform.tfvars         # variable values
-├── test_failover.sh         # failover test script
 └── variables.tf             # variable declarations
 
 ```
@@ -130,7 +126,7 @@ The project is organized as follows:
   - Defined in the `vpc` module with a CIDR block (`10.0.0.0/16`), public subnets (`10.0.1.0/24`, `10.0.2.0/24`), and private subnets (`10.0.3.0/24`, `10.0.4.0/24`) across multiple availability zones.
   - Security groups (`security_group` module) control traffic to EC2, RDS, and ALB.
 - **Secondary VPC**:
-  - Mirrored setup in the `vpc_secondary` module with a distinct CIDR (`10.1.0.0/16`) and similar subnet configurations.
+  - Mirrored setup in the `vpc_secondary` module with a distinct CIDR (`10.0.0.0/16`) and similar subnet configurations.
 - **Global Accelerator**:
   - Configured in the `global_accelerator` module to route traffic between primary and secondary ALBs based on health checks (`/ref` path).
 
@@ -203,7 +199,7 @@ The project is organized as follows:
 - **Secondary ALB**:
   - Defined in the `alb_secondary` module, activated during failover to route traffic to the secondary EC2 ASG.
 
-**Primary ALB Unavailable**:
+**Primary ALB Unavailable(Due To unhealthyHosts From my ALB TargetGroups)**:
 ![Primary ALB Unavailable](image_assets/Primary%20-alb-unavailable.png "Primary ALB Unavailable")
 
 **Dashboard From Secondary ALB**:
@@ -224,11 +220,11 @@ The project is organized as follows:
 
 ### 9. Monitoring and Failover
 - **Primary Monitoring**:
-  - The `primary_monitoring` module uses CloudWatch to monitor ALB health and trigger alerts.
+  - The `primary_monitoring` module uses CloudWatch to monitor ALB health and sends an email.
 - **Failover Trigger**:
   - Lambda (`secondary_failover`) initiates failover when the primary region fails, scaling resources and updating routing.
 
-**Successful EC2 Initialization**:
+**Successful EC2 Initialization(By Lambda)**:
 ![Successful EC2 Initialization](image_assets/successful-ect-initialization.png "Successful EC2 Initialization")
 
 ## Setup Instructions
@@ -237,7 +233,7 @@ Follow these detailed steps to deploy the DR infrastructure:
 
 ### Prerequisites
 - **AWS Account**: With IAM permissions for EC2, RDS, S3, Lambda, VPC, ALB, and Global Accelerator.
-- **Terraform**: Version `>= 1.5.0` installed.
+- **Terraform**: Version `>= 5.0` installed.
 - **AWS CLI**: Configured with access keys (`aws configure`).
 - **Git**: For cloning the repository.
 
@@ -245,7 +241,7 @@ Follow these detailed steps to deploy the DR infrastructure:
 
 1. **Clone the Repository**
    ```bash
-   git clone <repository-url>
+   git clone https://github.com/alizaidansp/dr-deployment.git
    cd dr-deployment
    ```
 
@@ -262,6 +258,7 @@ Follow these detailed steps to deploy the DR infrastructure:
    - This creates an S3 bucket (`ali-amalitech-state-bucket`) with DynamoDB to store the Terraform state, enabling collaboration and state synchronization.
 
    **State Lock Test**:
+    - Testing to ensure state lock is working properly:
    ![State Lock Test](image_assets/Test%20state-lock.png "State Lock") 
 
 
@@ -282,8 +279,8 @@ Follow these detailed steps to deploy the DR infrastructure:
      db_name                          = "<DB_NAME>"
      db_username                      = "<DB_USERNAME>"
      db_password_ssm_param            = "<SSM_PARAM_NAME>"
-     desired_capacity                 = <PRIMARY_ASG_DESIRED_CAPACITY>
-     secondary_desired_capacity       = <SECONDARY_ASG_DESIRED_CAPACITY>
+     desired_capacity                 = "<PRIMARY_ASG_DESIRED_CAPACITY>"
+     secondary_desired_capacity       = "<SECONDARY_ASG_DESIRED_CAPACITY>"
      account_id                       = "<AWS_ACCOUNT_ID>"
      repository_name                  = "<REPOSITORY_NAME>"
      health_check_path                = "<HEALTH_CHECK_PATH>"
@@ -356,18 +353,10 @@ The DR process follows the Pilot Light strategy, with automated steps to ensure 
 - S3 CRR ensures data availability in the secondary bucket.
 - RDS backups and snapshots maintain database consistency.
 
-### 4. Operational Testing
-- Simulate a disaster using `test_failover.sh`:
-  ```bash
-  ./test_failover.sh
-  ```
+### 4. Operational Testing 
 - Verify the secondary application is accessible and logs are updated.
 
-### 5. Post-Recovery Operations
-- Once the primary region is restored:
-  1. Resynchronize data from the secondary region back to primary
-  2. Update Global Accelerator to revert traffic and scale down secondary resources
-  3. Reset the environment to normal operating state
+
 
 ## Maintenance and Monitoring
 
@@ -381,40 +370,33 @@ The DR process follows the Pilot Light strategy, with automated steps to ensure 
 
 ### CloudWatch Monitoring
 - **Alarms**: 
-  - EC2 health metrics
-  - RDS replica lag
-  - Lambda function errors
-  - ALB availability
-- **Logs**: Provide visibility into failover events and system health.
+  - ALB health metrics
+  - RDS availability
 
-### Regular DR Drills
-- Conduct quarterly tests and update documentation.
-- Verify AMI integrity and update as needed.
-- Test recovery procedures with different failure scenarios.
+
 
 ## Cost Considerations
 
 ### Pilot Light Strategy Benefits
 - **Stopped EC2 instances** in the secondary region incur only storage costs.
 - **Minimal Lambda functions** are kept active, with others triggered only when needed.
-- **RDS Read Replica** is a necessary cost for data synchronization.
 
 ### Optimization Tips
 - Use lifecycle policies in S3 to transition older objects to lower-cost storage tiers.
 - Monitor cross-region data transfer costs (S3 CRR, RDS replication).
 - Regularly review and right-size resources based on actual recovery needs.
-- Consider using Reserved Instances for predictable workloads in the primary region.
+
 
 ## Troubleshooting
 
 ### Common Issues and Solutions
 
 1. **State Lock Issues**: 
-   - Use `state_file.sh` to manage state conflicts:
+   - Use `state_file.sh` to manually create state-files if you dont want use terraform :
      ```bash
      ./bash_scripts/state_file.sh unlock
      ```
-   - If necessary, use `nuke.sh` to reset resources:
+   - If necessary, use `nuke.sh` to reset networking resources:
      ```bash
      ./bash_scripts/nuke.sh
      ```
@@ -434,19 +416,17 @@ The DR process follows the Pilot Light strategy, with automated steps to ensure 
    - Check RDS parameter groups for configuration consistency.
    - Monitor replication lag between primary and replica.
 
-**Target Group Issues**:
-![Deregistered Targets From Target Group](image_assets/after-deregistering-targets.png "Deregistered Targets From Target Group") 
+
 
 ## Security Considerations
 
 1. **Data Protection**:
    - All sensitive data (like RDS passwords) are stored in AWS SSM Parameter Store.
    - S3 buckets are configured with appropriate access policies.
-   - In-transit and at-rest encryption is enabled for data security.
 
 2. **Network Security**:
    - Security groups are configured with least-privilege access.
-   - Private subnets are used for sensitive resources (RDS).
+   - Private subnets are used for sensitive resources (RDS and EC2).
    - VPC endpoints minimize public internet exposure.
 
 3. **Access Control**:

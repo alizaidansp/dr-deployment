@@ -260,7 +260,6 @@ module "ec2_secondary" {
 # Primary Monitoring Module
 module "primary_monitoring" {
   source                  = "./modules/primary_monitoring"
-  
   primary_region          = var.primary_region
   primary_alb_arn         = module.alb.alb_arn
   primary_target_group_arn = module.alb.target_group_arn

@@ -9,3 +9,6 @@ aws elbv2 deregister-targets \
 
 ╰─ aws rds describe-db-snapshots --db-instance-identifier lamp-db-primary --region $(terraform output -raw primary_region)               ─╯
   
+
+
+  1.

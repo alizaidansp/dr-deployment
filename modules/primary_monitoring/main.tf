@@ -42,13 +42,13 @@ resource "aws_cloudwatch_metric_alarm" "primary_alb_unhealthy" {
 #  RDS availability alarm 
 resource "aws_cloudwatch_metric_alarm" "rds_not_available" {
   alarm_name          = "RDSNotAvailable"
-  namespace           = "Custom/RDS"
-  metric_name         = "DBAvailable"
+  namespace           = "AWS/RDS"
+  metric_name         = "DatabaseConnections"
   statistic           = "Minimum"
   period              = 60
   evaluation_periods  = 2
   threshold           = 1
-  comparison_operator = "LessThanThreshold"
+  comparison_operator = "LessThanThreshold"   # alarm if min connections < 1
   alarm_actions       = [aws_sns_topic.failover.arn]
 }
 
