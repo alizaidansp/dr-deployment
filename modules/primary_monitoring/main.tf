@@ -24,41 +24,32 @@ resource "aws_sns_topic_subscription" "test_subscription" {
 resource "aws_cloudwatch_metric_alarm" "primary_alb_unhealthy" {
   
   alarm_name          = "primary-alb-unhealthy"
-  comparison_operator = "LessThanOrEqualToThreshold"
-
-  evaluation_periods  = 1
-  metric_name         = "HealthyHostCount"
   namespace           = "AWS/ApplicationELB"
-  period              = 60
-  statistic           = "Average"
-  treat_missing_data = "breaching"  # Treat missing data as "unhealthy"
-  threshold           = 0
-  alarm_description   = "Alarm when no healthy hosts are available in primary ALB"
+  metric_name         = "UnHealthyHostCount"
    dimensions = {
-    TargetGroup  = split(":", var.primary_target_group_arn)[5]  # Gets everything after the 5th colon
-    LoadBalancer = split(":", var.alb_arn)[5]  
+    LoadBalancer = var.alb_arn
   }
+  statistic           = "Sum"
+  period              = 60
+  evaluation_periods  = 2
+  threshold           = 1
+  comparison_operator = "GreaterThanOrEqualToThreshold"
   alarm_actions = [aws_sns_topic.failover.arn]
+
 }
 
-resource "aws_cloudwatch_event_rule" "rds_failure" {
-  
-  name        = "rds-failure"
-  description = "Capture RDS failure events"
-  event_pattern = jsonencode({
-    "source"      : ["aws.rds"],
-    "detail-type" : ["RDS DB Instance Event"],
-    "detail"      : {
-        EventCategories = [ "failure", "availability", ]
-    }
-  })
-}
 
-resource "aws_cloudwatch_event_target" "rds_to_sns" {
-  
-  rule      = aws_cloudwatch_event_rule.rds_failure.name
-  target_id = "sendToSNS"
-  arn       = aws_sns_topic.failover.arn
+#  RDS availability alarm 
+resource "aws_cloudwatch_metric_alarm" "rds_not_available" {
+  alarm_name          = "RDSNotAvailable"
+  namespace           = "Custom/RDS"
+  metric_name         = "DBAvailable"
+  statistic           = "Minimum"
+  period              = 60
+  evaluation_periods  = 2
+  threshold           = 1
+  comparison_operator = "LessThanThreshold"
+  alarm_actions       = [aws_sns_topic.failover.arn]
 }
 
 

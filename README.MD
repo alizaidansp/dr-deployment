@@ -1,5 +1,43 @@
 # AWS Disaster Recovery Project
 
+## Table of Contents
+1. [Introduction](#introduction)
+2. [Project Overview](#project-overview)
+   - [Architecture](#architecture)
+   - [Key Components](#key-components)
+   - [Project Directory Structure](#project-directory-structure)
+3. [Infrastructure Details](#infrastructure-details)
+   - [VPC and Networking](#1-vpc-and-networking)
+   - [EC2 (Elastic Compute Cloud)](#2-ec2-elastic-compute-cloud)
+   - [RDS (Relational Database Service)](#3-rds-relational-database-service)
+   - [S3 (Simple Storage Service)](#4-s3-simple-storage-service)
+   - [Lambda (Serverless Compute)](#5-lambda-serverless-compute)
+   - [Application Load Balancer (ALB)](#6-application-load-balancer-alb)
+   - [Global Accelerator](#7-global-accelerator)
+   - [IAM](#8-iam)
+   - [Monitoring and Failover](#9-monitoring-and-failover)
+4. [Setup Instructions](#setup-instructions)
+   - [Prerequisites](#prerequisites)
+   - [Step-by-Step Deployment](#step-by-step-deployment)
+5. [Disaster Recovery Process](#disaster-recovery-process)
+   - [Trigger Event](#1-trigger-event)
+   - [Scaling the Pilot Light](#2-scaling-the-pilot-light)
+   - [Data Synchronization](#3-data-synchronization)
+   - [Operational Testing](#4-operational-testing)
+   - [Post-Recovery Operations](#5-post-recovery-operations)
+6. [Maintenance and Monitoring](#maintenance-and-monitoring)
+   - [Automated Backups](#automated-backups)
+   - [CloudWatch Monitoring](#cloudwatch-monitoring)
+   - [Regular DR Drills](#regular-dr-drills)
+7. [Cost Considerations](#cost-considerations)
+   - [Pilot Light Strategy Benefits](#pilot-light-strategy-benefits)
+   - [Optimization Tips](#optimization-tips)
+8. [Troubleshooting](#troubleshooting)
+   - [Common Issues and Solutions](#common-issues-and-solutions)
+9. [Security Considerations](#security-considerations)
+10. [Conclusion](#conclusion)
+11. [Additional Resources](#additional-resources)
+
 ## Introduction
 
 This is a comprehensive Disaster Recovery (DR) project utilizing Terraform to deploy a LAMP (Linux, Apache, MySQL, PHP) stack in AWS, implementing the **Pilot Light strategy**. The primary objective is to ensure the availability of critical AWS services—EC2, RDS, S3, and Lambda—with minimal operational overhead and rapid recovery capabilities in the event of a disaster.
@@ -9,6 +47,12 @@ The project leverages a multi-region architecture with a **primary region** (`eu
 ## Project Overview
 
 The DR Project AWS follows the Pilot Light strategy, where the secondary region maintains a reduced set of resources that can be activated swiftly during a disaster. The infrastructure is modularized using Terraform, with separate modules for each AWS service, ensuring maintainability and scalability.
+
+### Architecture
+
+The overall architecture implements a cross-region disaster recovery solution with automated failover capabilities:
+
+![DR Infrastructure Architecture](image_assets/DR%20INFRASTRUCTURE-2.jpg "AWS Multi-Region DR Architecture")
 
 ### Key Components
 
@@ -54,20 +98,7 @@ The project is organized as follows:
 │   ├── nuke.sh              # Script to destroy all resources
 │   └── state_file.sh        # Script to manage Terraform state
 ├── image_assets             # Directory for screenshots
-│   ├── Failover-init by lambda ec2.png
-│   ├── Flowchart.png
-│   ├── ga-healthy-2.png
-│   ├── ga-healthy.png
-│   ├── Primary -alb-unavailable.png
-│   ├── Promoted_rds_instance.png
-│   ├── removed primary tg.png
-│   ├── s3-write-success.png
-│   ├── Secondary-app-accesible.png
-│   ├── Snapshot creation-lambda.png
-│   ├── Snapshot from lambda.png
-│   ├── success-failover-complete.png
-│   ├── Test state-lock.png
-│   └── many more...
+│   ├── All Readme Image Assets
 ├── main.tf                  # Main Terraform configuration
 ├── modules                  # Reusable Terraform modules
 │   ├── alb
@@ -128,6 +159,9 @@ The project is organized as follows:
 - **Backups**:
   - Automated backups with a 1-day retention period and manual snapshots via the `manual_snapshot` Lambda function.
 
+**Database Snapshot**:
+![Database Snapshot](image_assets/db-snapshot.png "Database Snapshot")
+
 **Promoted RDS Instance**:
 ![Promoted RDS Instance](image_assets/Promoted_rds_instance.png "Promoted RDS Instance") 
 
@@ -142,6 +176,9 @@ The project is organized as follows:
 **S3 Write From The Application**:
 ![S3 Write From The Application](image_assets/s3-write-success.png "S3 Write From The Application") 
 
+**Replica Objects From Secondary Bucket**:
+![Replica Objects From Secondary Bucket](image_assets/replica-objects-fromSecondaryBucket.png "Replica Objects From Secondary Bucket")
+
 ### 5. Lambda (Serverless Compute)
 - **Failover Lambda**:
   - Deployed in the `secondary_failover` module, pings the primary ALB at defined intervals and when things are wrong, gets triggered to scale EC2 and promote RDS. Global Accelerator automatically shifts traffic to the secondary region in case of a failure.
@@ -153,17 +190,31 @@ The project is organized as follows:
 **RDS Snapshot Creation**:
 ![RDS Snapshot Creation](image_assets/Snapshot%20creation-lambda.png "RDS Snapshot Creation") 
 
+**Snapshot From Lambda**:
+![Snapshot From Lambda](image_assets/Snapshot%20from%20lambda.png "Snapshot From Lambda")
+
+**Unhealthy Lambda Logs**:
+![Unhealthy Lambda Log](image_assets/unhealthy%20lambda-log.png "Unhealthy Lambda Log")
+![Unhealthy Lambda Log 2](image_assets/unhealthy%20lambda-log-2.png "Unhealthy Lambda Log Detail")
+
 ### 6. Application Load Balancer (ALB)
 - **Primary ALB**:
   - Configured in the `alb` module to route traffic to the primary EC2 ASG, monitored by health checks.
 - **Secondary ALB**:
   - Defined in the `alb_secondary` module, activated during failover to route traffic to the secondary EC2 ASG.
 
-**Healthy Global Accelerator State**:
-![Healthy Global Accelerator](image_assets/ga-healthy-2.png "Healthy Global Accelerator") 
+**Primary ALB Unavailable**:
+![Primary ALB Unavailable](image_assets/Primary%20-alb-unavailable.png "Primary ALB Unavailable")
+
+**Dashboard From Secondary ALB**:
+![Dashboard From Secondary ALB](image_assets/dashboard-from-secondary-alb.png "Dashboard From Secondary ALB")
 
 ### 7. Global Accelerator
 - Routes traffic between primary and secondary ALBs based on health checks, ensuring seamless failover.
+
+**Healthy Global Accelerator States**:
+![Healthy Global Accelerator](image_assets/ga-healthy.png "Healthy Global Accelerator")
+![Healthy Global Accelerator Detail](image_assets/ga-healthy-2.png "Healthy Global Accelerator Detail") 
 
 ### 8. IAM
 - **Roles and Policies**:
@@ -177,8 +228,8 @@ The project is organized as follows:
 - **Failover Trigger**:
   - Lambda (`secondary_failover`) initiates failover when the primary region fails, scaling resources and updating routing.
 
-**Lambda Log For Failover**:
-![Lambda Log For Failover](image_assets/unhealthy%20lambda-log-2.png "Lambda Log For Failover") 
+**Successful EC2 Initialization**:
+![Successful EC2 Initialization](image_assets/successful-ect-initialization.png "Successful EC2 Initialization")
 
 ## Setup Instructions
 
@@ -213,34 +264,40 @@ Follow these detailed steps to deploy the DR infrastructure:
    **State Lock Test**:
    ![State Lock Test](image_assets/Test%20state-lock.png "State Lock") 
 
-3. **Configure Variables**
+
+
+3. **Configure Variables**  
    - Create or edit `terraform.tfvars` with your specific values:
      ```hcl
-     primary_region          = "eu-west-1"
-     secondary_region        = "us-east-1"
-     primary_bucket_name     = "primary-lamp-bucket-2023"
-     secondary_bucket_name   = "secondary-lamp-bucket-2023"
-     vpc_cidr                = "10.0.0.0/16"
-     public_subnet_cidrs     = ["10.0.1.0/24", "10.0.2.0/24"]
-     private_subnet_cidrs    = ["10.0.3.0/24", "10.0.4.0/24"]
-     vpc_secondary_cidr      = "10.1.0.0/16"
-     public_secondary_subnet_cidrs = ["10.1.1.0/24", "10.1.2.0/24"]
-     private_secondary_subnet_cidrs = ["10.1.3.0/24", "10.1.4.0/24"]
-     db_name                 = "lampdb"
-     db_username             = "admin"
-     db_password_ssm_param   = "/lamp/db/password"
-     desired_capacity        = 2
-     secondary_desired_capacity = 0
-     account_id              = "123456789012"  # Replace with your AWS account ID
-     repository_name         = "lamp-ecr"
-     health_check_path       = "/ref"
-     primary_asg_name        = "primary-asg"
-     secondary_asg_name      = "secondary-asg"
-     replica_db_identifier   = "lamp-replica"
-     main_db_identifier      = "lamp-primary"
-     ami_name                = "lamp-stack-ami"  # Name for your AMI
+     primary_region                    = "<PRIMARY_REGION>"
+     secondary_region                  = "<SECONDARY_REGION>"
+     primary_bucket_name               = "<PRIMARY_BUCKET_NAME>"
+     secondary_bucket_name             = "<SECONDARY_BUCKET_NAME>"
+     vpc_cidr                          = "<VPC_CIDR>"
+     public_subnet_cidrs              = ["<PUBLIC_SUBNET_CIDR_1>", "<PUBLIC_SUBNET_CIDR_2>"]
+     private_subnet_cidrs             = ["<PRIVATE_SUBNET_CIDR_1>", "<PRIVATE_SUBNET_CIDR_2>"]
+     vpc_secondary_cidr               = "<VPC_SECONDARY_CIDR>"
+     public_secondary_subnet_cidrs   = ["<PUBLIC_SECONDARY_SUBNET_CIDR_1>", "<PUBLIC_SECONDARY_SUBNET_CIDR_2>"]
+     private_secondary_subnet_cidrs  = ["<PRIVATE_SECONDARY_SUBNET_CIDR_1>", "<PRIVATE_SECONDARY_SUBNET_CIDR_2>"]
+     db_name                          = "<DB_NAME>"
+     db_username                      = "<DB_USERNAME>"
+     db_password_ssm_param            = "<SSM_PARAM_NAME>"
+     desired_capacity                 = <PRIMARY_ASG_DESIRED_CAPACITY>
+     secondary_desired_capacity       = <SECONDARY_ASG_DESIRED_CAPACITY>
+     account_id                       = "<AWS_ACCOUNT_ID>"
+     repository_name                  = "<REPOSITORY_NAME>"
+     health_check_path                = "<HEALTH_CHECK_PATH>"
+     primary_asg_name                 = "<PRIMARY_ASG_NAME>"
+     secondary_asg_name               = "<SECONDARY_ASG_NAME>"
+     replica_db_identifier            = "<REPLICA_DB_IDENTIFIER>"
+     main_db_identifier               = "<MAIN_DB_IDENTIFIER>"
+     ami_name                         = "<AMI_NAME>"
      ```
+
    - Ensure `availability_zones` and `availability_zones_secondary` match your regions (e.g., `["eu-west-1a", "eu-west-1b"]`).
+
+---
+
 
 4. **Deploy the Infrastructure**
    - Return to the root directory:
@@ -275,7 +332,13 @@ The DR process follows the Pilot Light strategy, with automated steps to ensure 
 - Example: Primary ALB returns a 503 error.
 
 **Deregister Targets From Primary ALB**:
-![Deregister Targets From Primary ALB](image_assets/Primary%20-alb-unavailable.png "Deregister Targets From Primary ALB") 
+![Deregister Targets From Primary ALB](image_assets/Primary%20-alb-unavailable.png "Deregister Targets From Primary ALB")
+
+**After Deregistering Targets**:
+![After Deregistering Targets](image_assets/after-deregistering-targets.png "After Deregistering Targets")
+
+**Removed Primary Target Group**:
+![Removed Primary Target Group](image_assets/removed%20primary%20tg.png "Removed Primary Target Group")
 
 ### 2. Scaling the Pilot Light
 - **EC2**: Lambda triggers the secondary ASG to scale up instances using the pre-configured AMI.
@@ -285,6 +348,9 @@ The DR process follows the Pilot Light strategy, with automated steps to ensure 
 
 **Success Failover To Secondary Region**:
 ![App Accessible from Secondary ALB](image_assets/Secondary-app-accesible.png "App Accessible from Secondary ALB") 
+
+**Success Failover Complete**:
+![Success Failover Complete](image_assets/success-failover-complete.png "Success Failover Complete")
 
 ### 3. Data Synchronization
 - S3 CRR ensures data availability in the secondary bucket.
@@ -338,18 +404,6 @@ The DR process follows the Pilot Light strategy, with automated steps to ensure 
 - Monitor cross-region data transfer costs (S3 CRR, RDS replication).
 - Regularly review and right-size resources based on actual recovery needs.
 - Consider using Reserved Instances for predictable workloads in the primary region.
-
-## Architectural Diagram
-
-The flowchart below outlines the DR workflow:
-1. **Start**: User request via Global Accelerator.
-2. **Health Check**: CloudWatch monitors ALB health.
-   - **Healthy**: Route to primary region.
-   - **Unhealthy**: Trigger failover.
-3. **Failover**: Scale secondary resources, promote RDS, update routing.
-4. **End**: Traffic routed to secondary region.
-
-![Flowchart For DR](image_assets/DR%20INFRASTRUCTURE.jpg "Flowchart For DR") 
 
 ## Troubleshooting
 
