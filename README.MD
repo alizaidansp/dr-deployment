@@ -95,32 +95,32 @@ The project is organized as follows:
 ```
 .
 ├── bash_scripts
-│   ├── nuke.sh              # Script to destroy all resources
-│   └── state_file.sh        # Script to manage Terraform state
-├── image_assets             # Directory for screenshots
-│   ├── All Readme Image Assets
-├── main.tf                  # Main Terraform configuration
-├── modules                  # Reusable Terraform modules
-│   ├── alb
-│   ├── ami                  # AMI module for EC2 instances
-│   ├── ec2
-│   ├── ecr
-│   ├── global_accelerator
-│   ├── iam
-│   ├── manual_snapshot
-│   ├── primary_monitoring
-│   ├── rds
-│   ├── s3
-│   ├── secondary_failover
-│   ├── security_group
-│   └── vpc
+│   ├── nuke.sh              # tear down all resources
+│   └── state_file.sh        # manage Terraform state backend
+├── image_assets             # screenshots for docs
+├── main.tf                  # root Terraform config
+├── modules                  # reusable service modules
+│   ├── alb                  # ALB setup
+│   ├── ami                  # EC2 AMI handling
+│   ├── ec2                  # EC2 & ASG definitions
+│   ├── ecr                  # ECR repo setup
+│   ├── global_accelerator   # Global Accelerator config
+│   ├── iam                  # IAM roles & policies
+│   ├── manual_snapshot      # on-demand RDS snapshots
+│   ├── primary_monitoring   # CloudWatch alarms for primary
+│   ├── rds                  # RDS & replica setup
+│   ├── s3                   # S3 buckets & replication
+│   ├── secondary_failover   # failover orchestration
+│   ├── security_group       # security groups
+│   └── vpc                  # VPC & subnet layout
 ├── outputs.tf               # Terraform outputs
-├── providers.tf             # Provider configuration
-├── README.MD                # This document
-├── state-bootstrap          # Terraform state backend setup
-├── terraform.tfvars         # Variable definitions
-├── test_failover.sh         # Script to test failover
-└── variables.tf             # Variable declarations
+├── providers.tf             # AWS provider config
+├── README.MD                # project overview & steps
+├── state-bootstrap          # init remote state setup
+├── terraform.tfvars         # variable values
+├── test_failover.sh         # failover test script
+└── variables.tf             # variable declarations
+
 ```
 
 ## Infrastructure Details
