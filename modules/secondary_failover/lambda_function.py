@@ -12,6 +12,7 @@ logger.setLevel(logging.INFO)
 # Autoscaling and RDS clients for secondary region (for failover actions)
 autoscaling = boto3.client('autoscaling', region_name=os.environ['SECONDARY_REGION'])
 rds_secondary = boto3.client('rds', region_name=os.environ['SECONDARY_REGION'])
+
 # RDS client for primary region (for health check)
 rds_primary = boto3.client('rds', region_name=os.environ['PRIMARY_REGION'])
 
@@ -33,10 +34,10 @@ def lambda_handler(event, context):
         }
 
     # Log environment variables
-    logger.info(f"Environment variables: primary_alb_dns={primary_alb_dns}, "
-                f"health_check_path={health_check_path}, secondary_asg_name={secondary_asg_name}, "
-                f"secondary_rds_id={secondary_rds_id}, primary_rds_id={primary_rds_id}, "
-                f"primary_region={primary_region}, expected_status_codes={expected_status_codes}")
+    # logger.info(f"Environment variables: primary_alb_dns={primary_alb_dns}, "
+    #             f"health_check_path={health_check_path}, secondary_asg_name={secondary_asg_name}, "
+    #             f"secondary_rds_id={secondary_rds_id}, primary_rds_id={primary_rds_id}, "
+    #             f"primary_region={primary_region}, expected_status_codes={expected_status_codes}")
 
     # 1. Check ALB health
     alb_healthy = True

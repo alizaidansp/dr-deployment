@@ -52,6 +52,7 @@ resource "aws_iam_role" "ec2_role" {
 }
 
 # Combined Policy Attachment
+
 # Attach static (predefined) IAM policies
 resource "aws_iam_role_policy_attachment" "ec2_static_policies" {
   for_each = toset([

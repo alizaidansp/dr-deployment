@@ -99,7 +99,7 @@ The project is organized as follows:
 ├── modules                  # reusable service modules
 │   ├── alb                  # ALB setup
 │   ├── ami                  # EC2 AMI handling
-│   ├── ec2                  # EC2 & ASG definitions
+│   ├── asg_launch_template  # Launch Template & ASG definitions
 │   ├── ecr                  # ECR repo setup
 │   ├── global_accelerator   # Global Accelerator config
 │   ├── iam                  # IAM roles & policies

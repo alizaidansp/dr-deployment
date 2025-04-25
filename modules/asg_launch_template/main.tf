@@ -92,6 +92,7 @@ resource "aws_autoscaling_group" "app" {
     key                 = "Name"
     value               = var.region == "us-east-1" ? "lamp-ec2-asg" : "lamp-ec2-asg-primary"
     propagate_at_launch = true
+    # This ensures that the tag is passed down to EC2 instances launched by the ASG.
   }
 }
 

@@ -15,7 +15,7 @@ resource "aws_sns_topic" "failover" {
 resource "aws_sns_topic_subscription" "test_subscription" {
   topic_arn = aws_sns_topic.failover.arn
   protocol  = "email"
-  endpoint  = "zaidanali028@gmail.com" # Replace with your email
+  endpoint  = "zaidanali028@gmail.com" 
 }
 
 
@@ -35,6 +35,7 @@ resource "aws_cloudwatch_metric_alarm" "primary_alb_unhealthy" {
   threshold           = 1
   comparison_operator = "GreaterThanOrEqualToThreshold"
   alarm_actions = [aws_sns_topic.failover.arn]
+  
 
 }
 

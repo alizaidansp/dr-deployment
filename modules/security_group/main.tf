@@ -73,6 +73,8 @@ resource "aws_security_group" "rds_sg" {
     from_port   = 0
     to_port     = 0
     protocol    = "-1"
+    # is used to allow all protocols (both TCP, UDP, and other network protocols)
+    
     cidr_blocks = ["0.0.0.0/0"]
   }
 

@@ -5,11 +5,6 @@ variable "replication_role_name" {
   default     = "s3-replication-role"
 }
 
-variable "laravel_role_name" {
-  description = "Name of the IAM role for Laravel application"
-  type        = string
-  default     = "laravel-app-role"
-}
 
 variable "primary_bucket_arn" {
   description = "ARN of the primary S3 bucket"

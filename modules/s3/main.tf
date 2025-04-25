@@ -19,7 +19,7 @@ resource "aws_s3_bucket" "primary" {
     Name        = "PrimaryS3Bucket"
     Environment = "DisasterRecovery"
     Project     = "LaravelApp"
-    Region      = "us-east-1"
+    Region      = var.primary_region
   }
 }
 
@@ -63,7 +63,7 @@ resource "aws_s3_bucket" "secondary" {
     Name        = "SecondaryS3Bucket"
     Environment = "DisasterRecovery"
     Project     = "LaravelApp"
-    Region      = "us-west-2"
+    Region      = var.secondary_region
   }
 }
 

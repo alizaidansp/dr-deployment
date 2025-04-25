@@ -39,3 +39,8 @@ output "secondary_region" {
   description = "Secondary region"
   value       = var.secondary_region
 }  
+
+
+output "global_accelerator_dns_name" {
+  value = module.global_accelerator.global_accelerator_dns_name
+}

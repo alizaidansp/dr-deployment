@@ -38,13 +38,9 @@ for VPC_ID in $VPCS; do
     echo "  • Delete VPC Endpoint $EP"; aws ec2 delete-vpc-endpoints --vpc-endpoint-ids $EP
   done
 
-  ## 4) Peering Connections
-  for PC in $(aws ec2 describe-vpc-peering-connections \
-      --query "VpcPeeringConnections[?RequesterVpcInfo.VpcId=='$VPC_ID'||AccepterVpcInfo.VpcId=='$VPC_ID'].VpcPeeringConnectionId" --output text); do
-    echo "  • Delete Peering $PC"; aws ec2 delete-vpc-peering-connection --vpc-peering-connection-id $PC
-  done
+ 
 
-  ## 5) Route Tables (remove custom & routes to IGW)
+  ## 4) Route Tables (remove custom & routes to IGW)
   for RTB in $(aws ec2 describe-route-tables \
       --filters Name=vpc-id,Values=$VPC_ID \
       --query "RouteTables[].RouteTableId" --output text); do
@@ -98,14 +94,7 @@ for VPC_ID in $VPCS; do
     echo "  • Delete Subnet $SUB"; aws ec2 delete-subnet --subnet-id $SUB || true
   done
 
-  ## 10) DHCP options (if not default)
-  DHCP=$(aws ec2 describe-vpcs --vpc-ids $VPC_ID \
-    --query "Vpcs[0].DhcpOptionsId" --output text)
-  if [[ "$DHCP" != "default" ]]; then
-    echo "  • Reset DHCP opts & delete $DHCP"
-    aws ec2 associate-dhcp-options --dhcp-options-id default --vpc-id $VPC_ID
-    aws ec2 delete-dhcp-options --dhcp-options-id $DHCP
-  fi
+  
 
   ## 11) Finally, delete the VPC
   echo "  ➤ Deleting VPC $VPC_ID"

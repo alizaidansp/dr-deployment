@@ -5,7 +5,7 @@
 # done )
 
 
-# AMImodule
+# AMI module
 module "ami" {
    providers = {
     aws.secondary = aws.secondary
@@ -17,8 +17,7 @@ module "ami" {
   iam_instance_profile     = module.iam.instance_profile_name
 }
 
-
-# ECR Configuration
+ # ECR Configuration
 
 module "ecr" {
   source           = "./modules/ecr"
@@ -31,7 +30,7 @@ module "ecr" {
 }
 
 
-# Global Accelerator Configuration
+# # Global Accelerator Configuration
 module "global_accelerator" {
   source              = "./modules/global_accelerator"
   secondary_region =var.secondary_region
@@ -140,7 +139,7 @@ resource "aws_db_instance" "replica" {
 
 
 
-# S3 Module
+# # S3 Module
 module "s3" {
    providers = {
     aws           = aws
@@ -150,9 +149,11 @@ module "s3" {
   primary_bucket_name   = var.primary_bucket_name
   secondary_bucket_name = var.secondary_bucket_name
   replication_role_arn  = module.iam.s3_replication_role_arn
+  secondary_region      = var.secondary_region
+  primary_region        = var.primary_region
 }
 
-# # IAM Module
+ # IAM Module
 module "iam" {
  
   source    = "./modules/iam"
@@ -165,7 +166,6 @@ module "iam" {
   secondary_bucket_arn = module.s3.secondary_bucket_arn
   primary_bucket_id   = module.s3.primary_bucket_id
   secondary_bucket_id   = module.s3.secondary_bucket_id
-  laravel_role_name   = var.laravel_role_name
   region = var.primary_region
   db_password_ssm_param = module.rds.db_master_ssm_name
   secondary_region = var.secondary_region
@@ -175,8 +175,7 @@ module "iam" {
 
 
 
-
-# # # ALB Module
+# ALB Module
 module "alb" {
   source            = "./modules/alb"
   vpc_id            = module.vpc.vpc_id
@@ -198,10 +197,10 @@ module "alb_secondary" {
   target_group_port = 80
   health_check_path=var.health_check_path
 }
-# # # # EC2 Module
-module "ec2" {
+ # EC2 Module
+module "compute_main" {
   image_id             = module.ami.primary_ami_id  # Use primary AMI ID
-  source               = "./modules/ec2"
+  source               = "./modules/asg_launch_template"
   region = var.primary_region
   subnet_ids           = module.vpc.private_subnet_ids
   security_group_id    = module.security_group.ec2_sg_id
@@ -225,9 +224,9 @@ module "ec2" {
 
 
 # # EC2 Auto Scaling Group
-module "ec2_secondary" {
+module "compute_secondary" {
   image_id             = module.ami.secondary_ami_id  # Use secondary AMI ID
-  source               = "./modules/ec2"
+  source               = "./modules/asg_launch_template"
   providers = {
     aws = aws.secondary
   }

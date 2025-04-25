@@ -14,29 +14,29 @@ data "archive_file" "lambda_zip" {
   output_path = "${path.module}/lambda_function.zip"
 }
 
-# IAM Role for Lambda
-resource "aws_iam_role" "lambda_role" {
-  name = "rds-snapshot-lambda-role"
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Action = "sts:AssumeRole"
-        Effect = "Allow"
-        Principal = {
-          Service = "lambda.amazonaws.com"
-        }
-      }
-    ]
-  })
-}
+# # IAM Role for Lambda
+# resource "aws_iam_role" "lambda_role" {
+#   name = "rds-snapshot-lambda-role"
+#   assume_role_policy = jsonencode({
+#     Version = "2012-10-17"
+#     Statement = [
+#       {
+#         Action = "sts:AssumeRole"
+#         Effect = "Allow"
+#         Principal = {
+#           Service = "lambda.amazonaws.com"
+#         }
+#       }
+#     ]
+#   })
+# }
 
 
 
 # Lambda Function
 resource "aws_lambda_function" "snapshot_lambda" {
   filename      = data.archive_file.lambda_zip.output_path
-  function_name = "rds-snapshot-creator"
+  function_name = "rds-snapshot-agent"
   role          = var.lambda_role_arn
 
   handler       = "lambda_function.lambda_handler"
@@ -74,11 +74,3 @@ resource "aws_lambda_permission" "allow_eventbridge" {
   source_arn    = aws_cloudwatch_event_rule.snapshot_schedule.arn
 }
 
-# Outputs
-output "lambda_function_name" {
-  value = aws_lambda_function.snapshot_lambda.function_name
-}
-
-output "event_rule_name" {
-  value = aws_cloudwatch_event_rule.snapshot_schedule.name
-}

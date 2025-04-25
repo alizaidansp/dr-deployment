@@ -12,3 +12,14 @@ variable "replication_role_arn" {
   description = "ARN of the IAM role for S3 replication"
   type        = string
 }
+
+variable "primary_region" {
+   description = "Primary Region"
+  type        = string
+}
+
+variable "secondary_region" {
+   description = "Secondary Region"
+  type        = string
+}
+
