@@ -1,0 +1,85 @@
+pipeline {
+    agent any
+
+    stages {
+        // Stage 1: Clone the GitHub Repository
+        stage('Clone Repository') {
+            steps {
+                git branch: 'main',
+                    credentialsId: 'GITHUB_CREDENTIALS',
+                    url: 'https://github.com/alizaidansp/dr-deployment.git'
+                echo 'Repository cloned successfully.'
+            }
+        }
+
+        // Stage 2: Set Up Terraform State Backend
+        stage('Set up State Backend') {
+            steps {
+                withCredentials([aws(credentialsId: 'CREDENTIALS_ID')]) {
+                    dir('state-bootstrap') {
+                        sh 'terraform init'
+                        sh 'terraform apply -auto-approve'
+                    }
+                }
+                echo 'Terraform state backend set up successfully.'
+            }
+        }
+
+        // Stage 3: Terraform Init
+        stage('Terraform Init') {
+            steps {
+                withCredentials([aws(credentialsId: 'CREDENTIALS_ID')]) {
+                    sh 'terraform init'
+                }
+                echo 'Terraform initialized successfully.'
+            }
+        }
+
+        // Stage 4: Terraform Plan
+        stage('Terraform Plan') {
+            steps {
+                withCredentials([aws(credentialsId: 'CREDENTIALS_ID')]) {
+                    sh 'terraform plan'
+                }
+                echo 'Terraform plan generated successfully.'
+            }
+        }
+
+        // Stage 5: Infracost Cost Estimation
+        stage('Infracost Cost Estimation') {
+            steps {
+                withCredentials([aws(credentialsId: 'CREDENTIALS_ID')]) {
+                    sh 'infracost breakdown --path . --format json --out-file infracost.json'
+                    sh 'infracost output --path infracost.json'
+                }
+                echo 'Cost estimation completed.'
+            }
+        }
+
+        // Stage 6: Manual Approval
+        stage('Approval') {
+            steps {
+                input message: 'Review the Terraform plan and cost estimation. Proceed with apply?', ok: 'Apply'
+            }
+        }
+
+        // Stage 7: Terraform Apply
+        stage('Terraform Apply') {
+            steps {
+                withCredentials([aws(credentialsId: 'CREDENTIALS_ID')]) {
+                    sh 'terraform apply -auto-approve tfplan'
+                }
+                echo 'Infrastructure deployed successfully.'
+            }
+        }
+    }
+
+    post {
+        success {
+            echo 'Pipeline completed successfully! Infrastructure deployed to AWS.'
+        }
+        failure {
+            echo 'Pipeline failed! Check logs for errors.'
+        }
+    }
+}
