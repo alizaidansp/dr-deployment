@@ -1,5 +1,9 @@
 pipeline {
     agent any
+    environment {
+        CREDENTIALS_ID = 'JENKINS_PAT' // Credentials ID for Git authentication
+    
+    }
 
     stages {
         // Stage 1: Clone the GitHub Repository
