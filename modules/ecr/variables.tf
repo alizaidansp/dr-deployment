@@ -1,7 +1,7 @@
 variable "repository_name" {
   description = "Name of the ECR repository"
   type        = string
-  default     = "lamp-app"
+  default     = "waf-lamp-repo"
 }
 
 variable "secondary_region" {
