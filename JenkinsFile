@@ -6,7 +6,7 @@ pipeline {
         stage('Clone Repository') {
             steps {
                 git branch: 'main',
-                    credentialsId: 'GITHUB_CREDENTIALS',
+                    credentialsId: 'CREDENTIALS_ID',
                     url: 'https://github.com/alizaidansp/dr-deployment.git'
                 echo 'Repository cloned successfully.'
             }
@@ -77,6 +77,9 @@ pipeline {
     post {
         success {
             echo 'Pipeline completed successfully! Infrastructure deployed to AWS.'
+            // cleanWs() // Clean workspace after a successful build
+
+
         }
         failure {
             echo 'Pipeline failed! Check logs for errors.'
