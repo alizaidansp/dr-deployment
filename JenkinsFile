@@ -1,17 +1,23 @@
 pipeline {
     agent any
     environment {
+        // Environment Variables
+        GITHUB_REPO_URL = 'https://github.com/alizaidansp/dr-deployment.git' // GitHub repository URL
+        BRANCH = 'main' // Git branch
         CREDENTIALS_ID = 'JENKINS_PAT' // Credentials ID for Git authentication
-    
+        AWS_CREDENTIALS_ID = 'MY_AWS_ACCESS_KEY' // AWS Credentials ID
     }
 
     stages {
         // Stage 1: Clone the GitHub Repository
         stage('Clone Repository') {
             steps {
-                git branch: 'main',
-                    credentialsId: 'CREDENTIALS_ID',
-                    url: 'https://github.com/alizaidansp/dr-deployment.git'
+                script {
+                    echo "Cloning repository from ${GITHUB_REPO_URL} on branch ${BRANCH}"
+                }
+                git branch: "${BRANCH}",
+                    credentialsId: "${CREDENTIALS_ID}",
+                    url: "${GITHUB_REPO_URL}"
                 echo 'Repository cloned successfully.'
             }
         }
@@ -19,7 +25,7 @@ pipeline {
         // Stage 2: Set Up Terraform State Backend
         stage('Set up State Backend') {
             steps {
-                withCredentials([aws(credentialsId: 'CREDENTIALS_ID')]) {
+                withCredentials([aws(credentialsId: "${AWS_CREDENTIALS_ID}")]) {
                     dir('state-bootstrap') {
                         sh 'terraform init'
                         sh 'terraform apply -auto-approve'
@@ -32,7 +38,7 @@ pipeline {
         // Stage 3: Terraform Init
         stage('Terraform Init') {
             steps {
-                withCredentials([aws(credentialsId: 'CREDENTIALS_ID')]) {
+                withCredentials([aws(credentialsId: "${AWS_CREDENTIALS_ID}")]) {
                     sh 'terraform init'
                 }
                 echo 'Terraform initialized successfully.'
@@ -42,7 +48,7 @@ pipeline {
         // Stage 4: Terraform Plan
         stage('Terraform Plan') {
             steps {
-                withCredentials([aws(credentialsId: 'CREDENTIALS_ID')]) {
+                withCredentials([aws(credentialsId: "${AWS_CREDENTIALS_ID}")]) {
                     sh 'terraform plan'
                 }
                 echo 'Terraform plan generated successfully.'
@@ -52,7 +58,7 @@ pipeline {
         // Stage 5: Infracost Cost Estimation
         stage('Infracost Cost Estimation') {
             steps {
-                withCredentials([aws(credentialsId: 'CREDENTIALS_ID')]) {
+                withCredentials([aws(credentialsId: "${AWS_CREDENTIALS_ID}")]) {
                     sh 'infracost breakdown --path . --format json --out-file infracost.json'
                     sh 'infracost output --path infracost.json'
                 }
@@ -70,7 +76,7 @@ pipeline {
         // Stage 7: Terraform Apply
         stage('Terraform Apply') {
             steps {
-                withCredentials([aws(credentialsId: 'CREDENTIALS_ID')]) {
+                withCredentials([aws(credentialsId: "${AWS_CREDENTIALS_ID}")]) {
                     sh 'terraform apply -auto-approve tfplan'
                 }
                 echo 'Infrastructure deployed successfully.'
@@ -82,8 +88,6 @@ pipeline {
         success {
             echo 'Pipeline completed successfully! Infrastructure deployed to AWS.'
             // cleanWs() // Clean workspace after a successful build
-
-
         }
         failure {
             echo 'Pipeline failed! Check logs for errors.'
