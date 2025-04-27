@@ -29,6 +29,7 @@ pipeline {
 
         // Stage 1.5: Clone Application Repository
         // Stage: Clone Application Repository and Inject .env File
+// Stage: Clone Application Repository
 stage('Clone Application Repository') {
     steps {
         script {
@@ -39,16 +40,20 @@ stage('Clone Application Repository') {
                     url: "${GITHUB_APP_REPO}"
                 echo 'Application repository cloned successfully.'
             }
+            // Copy ask-kstu-backend-v3 to the workspace root to match dockerfile_path
+            sh "cp -r ${APP_TEMP_DIR}/${EXPECTED_APP_DIR} ${WORKSPACE}/ask-kstu-backend-v3"
+            echo 'Application code copied to workspace root.'
         }
     }
 }
 
+// Stage: Inject .env File
 stage('Inject .env File') {
     steps {
         withCredentials([file(credentialsId: 'ENV_SECRET_KsTU', variable: 'ENV_FILE')]) {
             script {
-                // Navigate to the application directory
-                dir("${APP_TEMP_DIR}/${EXPECTED_APP_DIR}") {
+                // Navigate to the copied application directory
+                dir("ask-kstu-backend-v3") {
                     // Remove the existing .env file if it exists
                     sh "if [ -e .env ]; then rm -f .env; fi"
                     // Copy the secret file to .env in the application directory
