@@ -2,17 +2,15 @@ pipeline {
     agent any
     environment {
         // Environment Variables
-        GITHUB_REPO_URL      = 'https://github.com/alizaidansp/dr-deployment.git' // GitHub deployment repo URL
-        BRANCH               = 'main' // Git branch
-        CREDENTIALS_ID       = 'JENKINS_PAT' // Credentials ID for Git authentication
-        AWS_CREDENTIALS_ID   = 'MY_AWS_ACCESS_KEY' // AWS Credentials ID
-        S3_BUCKET_NAME       = 'ali-amalitech-state-bucket' // Terraform state S3 bucket
-
-        // App code repository for Docker build (Terraform null_resource expects this)
+        GITHUB_REPO_URL      = 'https://github.com/alizaidansp/dr-deployment.git'
+        BRANCH               = 'main'
+        CREDENTIALS_ID       = 'JENKINS_PAT'
+        AWS_CREDENTIALS_ID   = 'MY_AWS_ACCESS_KEY'
+        S3_BUCKET_NAME       = 'ali-amalitech-state-bucket'
         GITHUB_APP_REPO      = 'https://github.com/alizaidansp/waf-lamp-repo.git'
         APP_REPO_BRANCH      = 'main'
-        APP_TEMP_DIR         = 'waf-lamp-repo-tmp'        // Temporary clone directory
-        EXPECTED_APP_DIR     = 'ask-kstu-backend-v3'      // Directory Terraform expects
+        APP_TEMP_DIR         = 'waf-lamp-repo-tmp'
+        EXPECTED_APP_DIR     = 'ask-kstu-backend-v3'
     }
 
     stages {
@@ -21,11 +19,11 @@ pipeline {
             steps {
                 script {
                     echo "Cloning deployment repo from ${GITHUB_REPO_URL} on branch ${BRANCH}"
+                    git branch: "${BRANCH}",
+                        credentialsId: "${CREDENTIALS_ID}",
+                        url: "${GITHUB_REPO_URL}"
+                    echo 'Deployment repository cloned successfully.'
                 }
-                git branch: "${BRANCH}",
-                    credentialsId: "${CREDENTIALS_ID}",
-                    url: "${GITHUB_REPO_URL}"
-                echo 'Deployment repository cloned successfully.'
             }
         }
 
@@ -34,9 +32,8 @@ pipeline {
             steps {
                 script {
                     withCredentials([aws(credentialsId: "${AWS_CREDENTIALS_ID}")]) {
-                        // Check if S3 bucket exists (escape $? properly)
                         def bucketExists = sh(
-                            script: '''aws s3api head-bucket --bucket ${S3_BUCKET_NAME} > /dev/null 2>&1; echo \$?''',
+                            script: "aws s3api head-bucket --bucket ${S3_BUCKET_NAME} > /dev/null 2>&1; echo \$?",
                             returnStdout: true
                         ).trim()
 
@@ -72,32 +69,28 @@ pipeline {
         stage('Clone App for Docker Build') {
             steps {
                 script {
-                    // Clean old directories
                     sh "rm -rf ${APP_TEMP_DIR} ${EXPECTED_APP_DIR}"
-                    // Clone into temp
                     sh "git clone --branch ${APP_REPO_BRANCH} --single-branch ${GITHUB_APP_REPO} ${APP_TEMP_DIR}"
-                    // Move into expected folder
                     sh "mkdir -p ${EXPECTED_APP_DIR} && mv ${APP_TEMP_DIR}/* ${EXPECTED_APP_DIR}/ && rm -rf ${APP_TEMP_DIR}"
                     echo "${GITHUB_APP_REPO} cloned into ${EXPECTED_APP_DIR}"
                 }
             }
         }
 
+        // Stage 5: Inject .env File
         stage('Inject .env File') {
             steps {
                 withCredentials([file(credentialsId: 'ENV_SECRET_KsTU', variable: 'ENV_FILE')]) {
                     script {
-                        // Remove any existing .env in the expected folder
                         sh "if [ -e ${EXPECTED_APP_DIR}/.env ]; then rm -f ${EXPECTED_APP_DIR}/.env; fi"
-                        // Copy the secret file into the expected app directory
                         sh "cp -f \"${ENV_FILE}\" ${EXPECTED_APP_DIR}/.env"
                         echo ".env file injected into ${EXPECTED_APP_DIR}"
                     }
                 }
             }
-        }}
+        }
 
-        // Stage 5: Terraform Init
+        // Stage 6: Terraform Init
         stage('Terraform Init') {
             steps {
                 withCredentials([aws(credentialsId: "${AWS_CREDENTIALS_ID}")]) {
@@ -107,35 +100,35 @@ pipeline {
             }
         }
 
-        // Stage 6: Terraform Plan
+        // Stage 7: Terraform Plan
         stage('Terraform Plan') {
             steps {
                 withCredentials([aws(credentialsId: "${AWS_CREDENTIALS_ID}")]) {
-                    sh 'terraform plan'
+                    sh 'terraform plan -out=tfplan'
                 }
                 echo 'Terraform plan generated successfully.'
             }
         }
 
-        // Stage 7: Infracost Cost Estimation
+        // Stage 8: Infracost Cost Estimation
         stage('Infracost Cost Estimation') {
             steps {
                 withCredentials([aws(credentialsId: "${AWS_CREDENTIALS_ID}")]) {
                     sh 'infracost breakdown --path . --format json --out-file infracost.json'
-                    sh 'infracost output --path infracost.json'
+                    sh 'infracost output --path infracost.json --format table'
                 }
                 echo 'Cost estimation completed.'
             }
         }
 
-        // Stage 8: Manual Approval
+        // Stage 9: Manual Approval
         stage('Approval') {
             steps {
                 input message: 'Review the Terraform plan and cost estimation. Proceed with apply?', ok: 'Apply'
             }
         }
 
-        // Stage 9: Terraform Apply
+        // Stage 10: Terraform Apply
         stage('Terraform Apply') {
             steps {
                 withCredentials([aws(credentialsId: "${AWS_CREDENTIALS_ID}")]) {
