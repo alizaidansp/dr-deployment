@@ -28,22 +28,21 @@ pipeline {
         stage('Set up State Backend') {
             steps {
                 script {
-                    // Check if the S3 bucket exists using AWS CLI
-                    def bucketExists = sh(script: "aws s3api head-bucket --bucket ${S3_BUCKET_NAME} --profile ${AWS_CREDENTIALS_ID} > /dev/null 2>&1; echo $?", returnStdout: true).trim()
-                    
-                    if (bucketExists == '0') {
-                        echo "Bucket ${S3_BUCKET_NAME} exists. Skipping Terraform setup."
-                    } else {
-                        echo "Bucket ${S3_BUCKET_NAME} does not exist. Running Terraform setup."
-
-                        // Run the Terraform commands if the bucket doesn't exist
-                        withCredentials([aws(credentialsId: "${AWS_CREDENTIALS_ID}")]) {
+                    withCredentials([aws(credentialsId: "${AWS_CREDENTIALS_ID}")]) {
+                        // Escape $? and use proper AWS credentials
+                        def bucketExists = sh(script: "aws s3api head-bucket --bucket ${S3_BUCKET_NAME} > /dev/null 2>&1; echo \$?", 
+                                           returnStdout: true).trim()
+                        
+                        if (bucketExists == '0') {
+                            echo "Bucket ${S3_BUCKET_NAME} exists. Skipping Terraform setup."
+                        } else {
+                            echo "Bucket ${S3_BUCKET_NAME} does not exist. Running Terraform setup."
                             dir('state-bootstrap') {
                                 sh 'terraform init'
                                 sh 'terraform apply -auto-approve'
                             }
+                            echo 'Terraform state backend set up successfully.'
                         }
-                        echo 'Terraform state backend set up successfully.'
                     }
                 }
             }
