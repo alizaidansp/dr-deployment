@@ -95,7 +95,7 @@ pipeline {
                 echo 'Cost estimation completed.'
             }
         }
-
+// 
         // Stage 6: Manual Approval
         stage('Approval') {
             steps {
