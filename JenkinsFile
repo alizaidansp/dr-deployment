@@ -27,6 +27,39 @@ pipeline {
             }
         }
 
+        // Stage 1.5: Clone Application Repository
+        // Stage: Clone Application Repository and Inject .env File
+stage('Clone Application Repository') {
+    steps {
+        script {
+            echo "Cloning application repo from ${GITHUB_APP_REPO} on branch ${APP_REPO_BRANCH}"
+            dir("${APP_TEMP_DIR}") {
+                git branch: "${APP_REPO_BRANCH}",
+                    credentialsId: "${CREDENTIALS_ID}",
+                    url: "${GITHUB_APP_REPO}"
+                echo 'Application repository cloned successfully.'
+            }
+        }
+    }
+}
+
+stage('Inject .env File') {
+    steps {
+        withCredentials([file(credentialsId: 'ENV_SECRET_KsTU', variable: 'ENV_FILE')]) {
+            script {
+                // Navigate to the application directory
+                dir("${APP_TEMP_DIR}/${EXPECTED_APP_DIR}") {
+                    // Remove the existing .env file if it exists
+                    sh "if [ -e .env ]; then rm -f .env; fi"
+                    // Copy the secret file to .env in the application directory
+                    sh "cp -f \"${ENV_FILE}\" .env"
+                }
+                echo '.env file injected successfully into application directory.'
+            }
+        }
+    }
+}
+
         // Stage 2: Set Up Terraform State Backend
         stage('Set up State Backend') {
             steps {
@@ -65,31 +98,6 @@ pipeline {
             }
         }
 
-        // Stage 4: Clone App for Docker Build
-        stage('Clone App for Docker Build') {
-            steps {
-                script {
-                    sh "rm -rf ${APP_TEMP_DIR} ${EXPECTED_APP_DIR}"
-                    sh "git clone --branch ${APP_REPO_BRANCH} --single-branch ${GITHUB_APP_REPO} ${APP_TEMP_DIR}"
-                    sh "mkdir -p ${EXPECTED_APP_DIR} && mv ${APP_TEMP_DIR}/* ${EXPECTED_APP_DIR}/ && rm -rf ${APP_TEMP_DIR}"
-                    echo "${GITHUB_APP_REPO} cloned into ${EXPECTED_APP_DIR}"
-                }
-            }
-        }
-
-        // Stage 5: Inject .env File
-        stage('Inject .env File') {
-            steps {
-                withCredentials([file(credentialsId: 'ENV_SECRET_KsTU', variable: 'ENV_FILE')]) {
-                    script {
-                        sh "if [ -e ${EXPECTED_APP_DIR}/.env ]; then rm -f ${EXPECTED_APP_DIR}/.env; fi"
-                        sh "cp -f \"${ENV_FILE}\" ${EXPECTED_APP_DIR}/.env"
-                        echo ".env file injected into ${EXPECTED_APP_DIR}"
-                    }
-                }
-            }
-        }
-
         // Stage 6: Terraform Init
         stage('Terraform Init') {
             steps {
@@ -104,7 +112,7 @@ pipeline {
         stage('Terraform Plan') {
             steps {
                 withCredentials([aws(credentialsId: "${AWS_CREDENTIALS_ID}")]) {
-                    sh 'terraform plan -out=tfplan'
+                    sh "terraform plan -out=tfplan -var='app_dir=${WORKSPACE}/${APP_TEMP_DIR}/${EXPECTED_APP_DIR}'"
                 }
                 echo 'Terraform plan generated successfully.'
             }
@@ -132,7 +140,7 @@ pipeline {
         stage('Terraform Apply') {
             steps {
                 withCredentials([aws(credentialsId: "${AWS_CREDENTIALS_ID}")]) {
-                    sh 'terraform apply -auto-approve tfplan'
+                    sh "terraform apply -auto-approve -var='app_dir=${WORKSPACE}/${APP_TEMP_DIR}/${EXPECTED_APP_DIR}' tfplan"
                 }
                 echo 'Infrastructure deployed successfully.'
             }
