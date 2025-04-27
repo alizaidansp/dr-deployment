@@ -59,6 +59,7 @@ pipeline {
                     dir('laravel-ec2-deployment') {  // Target directory
                         // Force copy credentials file to working directory
                         sh "cp -f \"${TFVARS_FILE}\" ./terraform.tfvars"
+                        sh "ls -la"
 
 
 
