@@ -34,8 +34,9 @@ pipeline {
             steps {
                 script {
                     withCredentials([aws(credentialsId: "${AWS_CREDENTIALS_ID}")]) {
+                        // Check if S3 bucket exists (escape $? properly)
                         def bucketExists = sh(
-                            script: "aws s3api head-bucket --bucket ${S3_BUCKET_NAME} > /dev/null 2>&1; echo $?>", 
+                            script: '''aws s3api head-bucket --bucket ${S3_BUCKET_NAME} > /dev/null 2>&1; echo \$?''',
                             returnStdout: true
                         ).trim()
 
@@ -67,7 +68,7 @@ pipeline {
             }
         }
 
-         // Stage 4: Clone App for Docker Build
+        // Stage 4: Clone App for Docker Build
         stage('Clone App for Docker Build') {
             steps {
                 script {
