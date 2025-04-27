@@ -28,27 +28,26 @@ pipeline {
         }
 
         // Stage 1.5: Clone Application Repository
-        // Stage: Clone Application Repository and Inject .env File
-// Stage: Clone Application Repository
 // Stage: Clone Application Repository
 stage('Clone Application Repository') {
     steps {
         script {
-            echo "Cloning application repo from ${GITHUB_APP_REPO} on branch ${APP_REPO_BRANCH}"
+            // clone app repo
             dir("${APP_TEMP_DIR}") {
                 git branch: "${APP_REPO_BRANCH}",
                     credentialsId: "${CREDENTIALS_ID}",
                     url: "${GITHUB_APP_REPO}"
-                echo 'Application repository cloned successfully.'
             }
-            // Create the target directory if it doesn't exist
-            sh "mkdir -p \"${WORKSPACE}/ask-kstu-backend-v3\""
-            // Copy ask-kstu-backend-v3 to the workspace root to match dockerfile_path
-            sh "cp -r ${APP_TEMP_DIR}/${EXPECTED_APP_DIR} \"${WORKSPACE}/ask-kstu-backend-v3\""
-            echo 'Application code copied to workspace root.'
+            // create and copy
+            sh "mkdir -p ask-kstu-backend-v3"
+            sh "cp -r ${APP_TEMP_DIR}/${EXPECTED_APP_DIR}/* ask-kstu-backend-v3/"
+            sh "rm -rf ${APP_TEMP_DIR}"
+           
         }
     }
 }
+
+
 
 // Stage: Inject .env File
 stage('Inject .env File') {
