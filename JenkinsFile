@@ -6,6 +6,8 @@ pipeline {
         BRANCH = 'main' // Git branch
         CREDENTIALS_ID = 'JENKINS_PAT' // Credentials ID for Git authentication
         AWS_CREDENTIALS_ID = 'MY_AWS_ACCESS_KEY' // AWS Credentials ID
+        S3_BUCKET_NAME='ali-amalitech-state-bucket'
+        
     }
 
     stages {
@@ -25,16 +27,43 @@ pipeline {
         // Stage 2: Set Up Terraform State Backend
         stage('Set up State Backend') {
             steps {
-                withCredentials([aws(credentialsId: "${AWS_CREDENTIALS_ID}")]) {
-                    dir('state-bootstrap') {
-                        sh 'terraform init'
-                        sh 'terraform apply -auto-approve'
+                script {
+                    // Check if the S3 bucket exists using AWS CLI
+                    def bucketExists = sh(script: "aws s3api head-bucket --bucket ${S3_BUCKET_NAME} --profile ${AWS_CREDENTIALS_ID} > /dev/null 2>&1; echo $?", returnStdout: true).trim()
+                    
+                    if (bucketExists == '0') {
+                        echo "Bucket ${S3_BUCKET_NAME} exists. Skipping Terraform setup."
+                    } else {
+                        echo "Bucket ${S3_BUCKET_NAME} does not exist. Running Terraform setup."
+
+                        // Run the Terraform commands if the bucket doesn't exist
+                        withCredentials([aws(credentialsId: "${AWS_CREDENTIALS_ID}")]) {
+                            dir('state-bootstrap') {
+                                sh 'terraform init'
+                                sh 'terraform apply -auto-approve'
+                            }
+                        }
+                        echo 'Terraform state backend set up successfully.'
                     }
                 }
-                echo 'Terraform state backend set up successfully.'
             }
         }
 
+
+     stage('Inject tfvars') {
+            steps {
+                // Securely handle terraform.tfvars file using Jenkins credentials store
+                withCredentials([file(
+                    credentialsId: 'terraform-vars',  // Jenkins credential ID for tfvars
+                    variable: 'TFVARS_FILE'  // Local variable name for the file
+                )]) {
+                    dir('laravel-ec2-deployment') {  // Target directory
+                        // Force copy credentials file to working directory
+                        sh 'cp -f $TFVARS_FILE ./terraform.tfvars'
+                    }
+                }
+            }
+        }
         // Stage 3: Terraform Init
         stage('Terraform Init') {
             steps {
@@ -44,6 +73,8 @@ pipeline {
                 echo 'Terraform initialized successfully.'
             }
         }
+
+        
 
         // Stage 4: Terraform Plan
         stage('Terraform Plan') {
