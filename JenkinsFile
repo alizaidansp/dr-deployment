@@ -30,6 +30,7 @@ pipeline {
         // Stage 1.5: Clone Application Repository
         // Stage: Clone Application Repository and Inject .env File
 // Stage: Clone Application Repository
+// Stage: Clone Application Repository
 stage('Clone Application Repository') {
     steps {
         script {
@@ -40,8 +41,10 @@ stage('Clone Application Repository') {
                     url: "${GITHUB_APP_REPO}"
                 echo 'Application repository cloned successfully.'
             }
+            // Create the target directory if it doesn't exist
+            sh "mkdir -p \"${WORKSPACE}/ask-kstu-backend-v3\""
             // Copy ask-kstu-backend-v3 to the workspace root to match dockerfile_path
-            sh "cp -r ${APP_TEMP_DIR}/${EXPECTED_APP_DIR} ${WORKSPACE}/ask-kstu-backend-v3"
+            sh "cp -r ${APP_TEMP_DIR}/${EXPECTED_APP_DIR} \"${WORKSPACE}/ask-kstu-backend-v3\""
             echo 'Application code copied to workspace root.'
         }
     }
