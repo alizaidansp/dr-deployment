@@ -53,7 +53,7 @@ pipeline {
             steps {
                 // Securely handle terraform.tfvars file using Jenkins credentials store
                 withCredentials([file(
-                    credentialsId: 'terraform-vars',  // Jenkins credential ID for tfvars
+                    credentialsId: 'terraform-kstu-vars',  // Jenkins credential ID for tfvars
                     variable: 'TFVARS_FILE'  // Local variable name for the file
                 )]) {
                     dir('laravel-ec2-deployment') {  // Target directory
