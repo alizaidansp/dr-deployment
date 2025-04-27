@@ -56,14 +56,14 @@ pipeline {
                     credentialsId: 'terraform-kstu-vars',  // Jenkins credential ID for tfvars
                     variable: 'TFVARS_FILE'  // Local variable name for the file
                 )]) {
-                    dir('laravel-ec2-deployment') {  // Target directory
+                    // dir('laravel-ec2-deployment') {  // Target directory
                         // Force copy credentials file to working directory
                         sh "cp -f \"${TFVARS_FILE}\" ./terraform.tfvars"
                         sh "ls -la"
 
 
 
-                    }
+                    // }
                 }
             }
         }
