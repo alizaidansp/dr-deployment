@@ -1,5 +1,6 @@
 pipeline {
     agent any
+
     environment {
         GITHUB_REPO_URL      = 'https://github.com/alizaidansp/dr-deployment.git'
         GITHUB_APP_REPO      = 'https://github.com/alizaidansp/waf-lamp-repo.git'
@@ -64,7 +65,7 @@ pipeline {
             }
         }
 
-           stage('Set up Terraform State Backend') {
+        stage('Set up Terraform State Backend') {
             steps {
                 withCredentials([aws(credentialsId: "${AWS_CREDENTIALS_ID}")]) {
                     script {
@@ -72,11 +73,7 @@ pipeline {
                         def result = sh(
                             script: "aws s3api head-bucket --bucket ${S3_BUCKET_NAME} --region eu-west-1",
                             returnStatus: true,
-                            // if exit status is 0, bucket exists
-
-                            returnStdout: true 
-                            // This tells Jenkins to capture the standard output (stdout) of the 
-                            // command and return it as a string.
+                            returnStdout: true
                         )
 
                         // Output the result for debugging
@@ -91,7 +88,7 @@ pipeline {
                             dir("${DEPLOYMENT_REPO_DIR}/state-bootstrap") {
                                 sh 'terraform init'
                                 sh 'terraform apply -auto-approve'
-                            // }
+                            }
                             echo 'Terraform state backend created successfully.'
                         } else {
                             echo "S3 Bucket '${S3_BUCKET_NAME}' exists. Skipping Terraform backend setup."
@@ -133,25 +130,20 @@ pipeline {
             }
         }
 
-    stage('Cost Estimation') {
-           
+        stage('Cost Estimation') {
             steps {
                 withCredentials([string(
                     credentialsId: 'infracost-api-key',  // Jenkins credential for Infracost API key
                     variable: 'INFRACOST_API_KEY'  // Bind to INFRACOST_API_KEY
                 )]) {
-                        // Generate Infracost JSON file before running cost_estimate.sh
-                        sh '''
-                        infracost breakdown --path . --format json --out-file infracost.json \\
-                           
+                    // Generate Infracost JSON file before running cost_estimate.sh
+                    sh '''
+                    infracost breakdown --path . --format json --out-file infracost.json \\
                         infracost output --path=infracost.json --format=table
-                        '''
-                    
+                    '''
                 }
             }
         }
-
-
 
         stage('Approval') {
             steps {
