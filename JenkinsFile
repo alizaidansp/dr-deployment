@@ -13,152 +13,161 @@ pipeline {
     }
 
     stages {
-        stage('Clone Deployment Repository') {
-            steps {
-                script {
-                    echo "Cloning deployment repo: ${GITHUB_REPO_URL}"
-                    git branch: "${BRANCH}",
-                        credentialsId: "${CREDENTIALS_ID}",
-                        url: "${GITHUB_REPO_URL}"
-                    sh "ls -la"
-                    echo 'Deployment repository cloned successfully.'
-                }
-            }
-        }
+//         stage('Clone Deployment Repository') {
+//             steps {
+//                 script {
+//                     echo "Cloning deployment repo: ${GITHUB_REPO_URL}"
+//                     git branch: "${BRANCH}",
+//                         credentialsId: "${CREDENTIALS_ID}",
+//                         url: "${GITHUB_REPO_URL}"
+//                     sh "ls -la"
+//                     echo 'Deployment repository cloned successfully.'
+//                 }
+//             }
+//         }
 
-        stage('Clone Application Repository') {
-            steps {
-                script {
-                    echo "Cloning application repo: ${GITHUB_APP_REPO}"
-                    sh "rm -rf ${APP_REPO_DIR}" // Clean old app dir if exists
-                    try {
-                        withCredentials([usernamePassword(credentialsId: "${CREDENTIALS_ID}", usernameVariable: 'GIT_USER', passwordVariable: 'GIT_TOKEN')]) {
-                            dir("${APP_REPO_DIR}") {
-                                sh """
-                                    git clone --branch ${BRANCH} https://${GIT_USER}:${GIT_TOKEN}@github.com/alizaidansp/waf-lamp-repo.git .
-                                    git checkout ${BRANCH}
-                                """
-                            }
-                        }
-                        sh "ls -la ${APP_REPO_DIR} || echo 'waf-lamp-repo directory missing'"
-                        sh "ls -la ${APP_REPO_DIR}/Dockerfile || echo 'Dockerfile not found'"
-                        echo "Application repository cloned successfully."
-                    } catch (Exception e) {
-                        error "Failed to clone application repository: ${e.message}"
-                    }
-                }
-            }
-        }
+//         stage('Clone Application Repository') {
+//             steps {
+//                 script {
+//                     echo "Cloning application repo: ${GITHUB_APP_REPO}"
+//                     sh "rm -rf ${APP_REPO_DIR}" // Clean old app dir if exists
+//                     try {
+//                         withCredentials([usernamePassword(credentialsId: "${CREDENTIALS_ID}", usernameVariable: 'GIT_USER', passwordVariable: 'GIT_TOKEN')]) {
+//                             dir("${APP_REPO_DIR}") {
+//                                 sh """
+//                                     git clone --branch ${BRANCH} https://${GIT_USER}:${GIT_TOKEN}@github.com/alizaidansp/waf-lamp-repo.git .
+//                                     git checkout ${BRANCH}
+//                                 """
+//                             }
+//                         }
+//                         sh "ls -la ${APP_REPO_DIR} || echo 'waf-lamp-repo directory missing'"
+//                         sh "ls -la ${APP_REPO_DIR}/Dockerfile || echo 'Dockerfile not found'"
+//                         echo "Application repository cloned successfully."
+//                     } catch (Exception e) {
+//                         error "Failed to clone application repository: ${e.message}"
+//                     }
+//                 }
+//             }
+//         }
 
-        stage('Inject .env File into App Repo') {
-            steps {
-                withCredentials([file(credentialsId: 'ENV_SECRET_KsTU', variable: 'ENV_FILE')]) {
-                    dir("${APP_REPO_DIR}") {
-                        sh """
-                            if [ -e .env ]; then rm .env; fi
-                            cp "\$ENV_FILE" .env
-                            ls -la
-                        """
-                    }
-                    echo '.env file injected into application repo successfully.'
-                }
-            }
-        }
+//         stage('Inject .env File into App Repo') {
+//             steps {
+//                 withCredentials([file(credentialsId: 'ENV_SECRET_KsTU', variable: 'ENV_FILE')]) {
+//                     dir("${APP_REPO_DIR}") {
+//                         sh """
+//                             if [ -e .env ]; then rm .env; fi
+//                             cp "\$ENV_FILE" .env
+//                             ls -la
+//                         """
+//                     }
+//                     echo '.env file injected into application repo successfully.'
+//                 }
+//             }
+//         }
 
-        stage('Set up Terraform State Backend') {
-    steps {
-        withCredentials([aws(credentialsId: "${AWS_CREDENTIALS_ID}")]) {
-            script {
-                // Check if the bucket exists
-                def result = sh(
-                    script: "aws s3api head-bucket --bucket ${S3_BUCKET_NAME} --region eu-west-1",
-                    returnStatus: true, // Ensures that the result is the exit status (0 if success, non-zero if error)
-                    returnStdout: true
-                )
+//         stage('Set up Terraform State Backend') {
+//     steps {
+//         withCredentials([aws(credentialsId: "${AWS_CREDENTIALS_ID}")]) {
+//             script {
+//                 // Check if the bucket exists
+//                 def result = sh(
+//                     script: "aws s3api head-bucket --bucket ${S3_BUCKET_NAME} --region eu-west-1",
+//                     returnStatus: true, // Ensures that the result is the exit status (0 if success, non-zero if error)
+//                     returnStdout: true
+//                 )
 
-                // Output the result for debugging
-                echo "Bucket check result: ${result}"
+//                 // Output the result for debugging
+//                 echo "Bucket check result: ${result}"
 
-                // If the bucket doesn't exist (result != 0), then create it using Terraform
-                if (result != 0) {
-                    echo "S3 Bucket '${S3_BUCKET_NAME}' does not exist. Running Terraform backend setup..."
-                    dir("state-bootstrap") {
-                        sh 'terraform init'
-                        sh 'terraform apply -auto-approve'
-                    }
-                    echo 'Terraform state backend created successfully.'
-                } else {
-                    echo "S3 Bucket '${S3_BUCKET_NAME}' exists. Skipping Terraform backend setup."
-                }
-            }
-        }
+//                 // If the bucket doesn't exist (result != 0), then create it using Terraform
+//                 if (result != 0) {
+//                     echo "S3 Bucket '${S3_BUCKET_NAME}' does not exist. Running Terraform backend setup..."
+//                     dir("state-bootstrap") {
+//                         sh 'terraform init'
+//                         sh 'terraform apply -auto-approve'
+//                     }
+//                     echo 'Terraform state backend created successfully.'
+//                 } else {
+//                     echo "S3 Bucket '${S3_BUCKET_NAME}' exists. Skipping Terraform backend setup."
+//                 }
+//             }
+//         }
+//     }
+
+
+
+// }
+
+
+
+//         stage('Inject terraform.tfvars') {
+//             steps {
+//                 withCredentials([file(credentialsId: 'terraform-kstu-vars', variable: 'TFVARS_FILE')]) {
+//                     sh "cp -f \"${TFVARS_FILE}\" terraform.tfvars"
+//                     sh "ls -la" // Debug to confirm files
+//                     echo 'terraform.tfvars injected.'
+//                 }
+//             }
+//         }
+
+//         stage('Terraform Init') {
+//             steps {
+//                 withCredentials([aws(credentialsId: "${AWS_CREDENTIALS_ID}")]) {
+//                     sh 'terraform init'
+//                 }
+//                 echo 'Terraform initialized successfully.'
+//             }
+//         }
+
+//         stage('Terraform Plan') {
+//             steps {
+//                 withCredentials([aws(credentialsId: "${AWS_CREDENTIALS_ID}")]) {
+//                     sh 'pwd' // Debug working directory
+//                     sh 'ls -la' // Debug workspace contents
+//                     sh 'ls -la waf-lamp-repo || echo "waf-lamp-repo not found"'
+//                     sh 'ls -la waf-lamp-repo/Dockerfile || echo "Dockerfile not found"'
+//                     sh 'terraform plan -out=tfplan'
+//                 }
+//                 echo 'Terraform plan generated successfully.'
+//             }
+//         }
+
+//       stage('Cost Estimation') {
+//     steps {
+//         withCredentials([string(
+//             credentialsId: 'infracost-api-key',  // Jenkins credential for Infracost API key
+//             variable: 'INFRACOST_API_KEY'  // Bind to INFRACOST_API_KEY
+//         )]) {
+//             // Generate Infracost JSON file before running cost_estimate.sh
+//             sh '''
+//             infracost breakdown --path . --format json --out-file infracost.json
+//             infracost output --path=infracost.json --format table
+//             '''
+//         }
+//     }
+// }
+
+
+//         stage('Approval') {
+//             steps {
+//                 input message: 'Review Terraform Plan and Infracost. Proceed with apply?', ok: 'Apply'
+//             }
+//         }
+
+//         stage('Terraform Apply') {
+//             steps {
+//                 withCredentials([aws(credentialsId: "${AWS_CREDENTIALS_ID}")]) {
+//                     sh 'terraform apply -auto-approve tfplan'
+//                 }
+//                 echo 'Infrastructure deployed successfully.'
+//             }
+//         }
+
+
+ stage ('destroy_infrastructure'){
+                    sh 'terraform destroy -auto-approve'
+
     }
-}
-
-
-
-        stage('Inject terraform.tfvars') {
-            steps {
-                withCredentials([file(credentialsId: 'terraform-kstu-vars', variable: 'TFVARS_FILE')]) {
-                    sh "cp -f \"${TFVARS_FILE}\" terraform.tfvars"
-                    sh "ls -la" // Debug to confirm files
-                    echo 'terraform.tfvars injected.'
-                }
-            }
-        }
-
-        stage('Terraform Init') {
-            steps {
-                withCredentials([aws(credentialsId: "${AWS_CREDENTIALS_ID}")]) {
-                    sh 'terraform init'
-                }
-                echo 'Terraform initialized successfully.'
-            }
-        }
-
-        stage('Terraform Plan') {
-            steps {
-                withCredentials([aws(credentialsId: "${AWS_CREDENTIALS_ID}")]) {
-                    sh 'pwd' // Debug working directory
-                    sh 'ls -la' // Debug workspace contents
-                    sh 'ls -la waf-lamp-repo || echo "waf-lamp-repo not found"'
-                    sh 'ls -la waf-lamp-repo/Dockerfile || echo "Dockerfile not found"'
-                    sh 'terraform plan -out=tfplan'
-                }
-                echo 'Terraform plan generated successfully.'
-            }
-        }
-
-      stage('Cost Estimation') {
-    steps {
-        withCredentials([string(
-            credentialsId: 'infracost-api-key',  // Jenkins credential for Infracost API key
-            variable: 'INFRACOST_API_KEY'  // Bind to INFRACOST_API_KEY
-        )]) {
-            // Generate Infracost JSON file before running cost_estimate.sh
-            sh '''
-            infracost breakdown --path . --format json --out-file infracost.json
-            infracost output --path=infracost.json --format table
-            '''
-        }
-    }
-}
-
-
-        stage('Approval') {
-            steps {
-                input message: 'Review Terraform Plan and Infracost. Proceed with apply?', ok: 'Apply'
-            }
-        }
-
-        stage('Terraform Apply') {
-            steps {
-                withCredentials([aws(credentialsId: "${AWS_CREDENTIALS_ID}")]) {
-                    sh 'terraform apply -auto-approve tfplan'
-                }
-                echo 'Infrastructure deployed successfully.'
-            }
-        }
     }
 
     post {
