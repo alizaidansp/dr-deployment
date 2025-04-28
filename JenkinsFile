@@ -152,9 +152,15 @@ pipeline {
         //     }
         // }
 
-        stage('destroy_infrastructure') {
+        
+        stage('Destroy Infrastructure') {
             steps {
-                sh 'terraform destroy -auto-approve'
+                withCredentials([aws(credentialsId: "${AWS_CREDENTIALS_ID}")]) {
+                    sh 'pwd'
+                   
+                    sh 'terraform destroy -auto-approve'
+                }
+                echo 'Infrastructure  desgtroyed successfully.'
             }
         }
     }
