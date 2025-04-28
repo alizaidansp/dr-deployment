@@ -66,37 +66,35 @@ pipeline {
         }
 
         stage('Set up Terraform State Backend') {
-            steps {
-                withCredentials([aws(credentialsId: "${AWS_CREDENTIALS_ID}")]) {
-                    script {
-                        // Check if the bucket exists
-                        def result = sh(
-                            script: "aws s3api head-bucket --bucket ${S3_BUCKET_NAME} --region eu-west-1",
-                            returnStatus: true,
-                            returnStdout: true
-                        )
+    steps {
+        withCredentials([aws(credentialsId: "${AWS_CREDENTIALS_ID}")]) {
+            script {
+                // Check if the bucket exists
+                def result = sh(
+                    script: "aws s3api head-bucket --bucket ${S3_BUCKET_NAME} --region eu-west-1",
+                    returnStatus: true,
+                    returnStdout: true
+                )
 
-                        // Output the result for debugging
-                        echo "Bucket check result: ${result}"
+                // Output the result for debugging
+                echo "Bucket check result: ${result}"
 
-                        // If the status is non-zero, it means there was an error
-                        if (result != '0') {
-                            echo "Error checking bucket existence: ${result}"
-                            echo "Running Terraform backend setup..."
-
-                            // Running Terraform backend setup
-                            dir("state-bootstrap") {
-                                sh 'terraform init'
-                                sh 'terraform apply -auto-approve'
-                            }
-                            echo 'Terraform state backend created successfully.'
-                        } else {
-                            echo "S3 Bucket '${S3_BUCKET_NAME}' exists. Skipping Terraform backend setup."
-                        }
+                // If the bucket doesn't exist (result != 0), then create it using Terraform
+                if (result != '0') {
+                    echo "S3 Bucket '${S3_BUCKET_NAME}' does not exist. Running Terraform backend setup..."
+                    dir("state-bootstrap") {
+                        sh 'terraform init'
+                        sh 'terraform apply -auto-approve'
                     }
+                    echo 'Terraform state backend created successfully.'
+                } else {
+                    echo "S3 Bucket '${S3_BUCKET_NAME}' exists. Skipping Terraform backend setup."
                 }
             }
         }
+    }
+}
+
 
         stage('Inject terraform.tfvars') {
             steps {
