@@ -25,7 +25,9 @@ module "ecr" {
   secondary_region = var.secondary_region  # us-east-1
   account_id       = var.account_id
   primary_region   = var.primary_region
-  dockerfile_path  = "${path.module}/waf-lamp-repo"  # Correct path to directory
+  # dockerfile_path  = "${path.module}/../waf-lamp-repo"  # Correct path to directory(Local Deployment)
+  dockerfile_path  = "${path.module}/waf-lamp-repo"  # Correct path to directory(Jenkins Deployment)
+
  
 }
 

@@ -18,8 +18,8 @@ pipeline {
                     echo "Cloning deployment repo: ${GITHUB_REPO_URL}"
                     git branch: "${BRANCH}",
                         credentialsId: "${CREDENTIALS_ID}",
-                        sh "ls -la"
                         url: "${GITHUB_REPO_URL}"
+                    sh "ls -la"
                     echo 'Deployment repository cloned successfully.'
                 }
             }
@@ -30,15 +30,21 @@ pipeline {
                 script {
                     echo "Cloning application repo: ${GITHUB_APP_REPO}"
                     sh "rm -rf ${APP_REPO_DIR}" // Clean old app dir if exists
-                    dir('..') {   // Clone at one level above
-                        git branch: "${BRANCH}",
-                            credentialsId: "${CREDENTIALS_ID}",
-                            url: "${GITHUB_APP_REPO}",
-                            changelog: false,
-                            poll: false
+                    try {
+                        withCredentials([usernamePassword(credentialsId: "${CREDENTIALS_ID}", usernameVariable: 'GIT_USER', passwordVariable: 'GIT_TOKEN')]) {
+                            dir("${APP_REPO_DIR}") {
+                                sh """
+                                    git clone --branch ${BRANCH} https://${GIT_USER}:${GIT_TOKEN}@github.com/alizaidansp/waf-lamp-repo.git .
+                                    git checkout ${BRANCH}
+                                """
+                            }
+                        }
+                        sh "ls -la ${APP_REPO_DIR} || echo 'waf-lamp-repo directory missing'"
+                        sh "ls -la ${APP_REPO_DIR}/Dockerfile || echo 'Dockerfile not found'"
+                        echo "Application repository cloned successfully."
+                    } catch (Exception e) {
+                        error "Failed to clone application repository: ${e.message}"
                     }
-                    echo "Application repository cloned successfully."
-                    sh "ls -la ../" // Debug workspace structure
                 }
             }
         }
@@ -46,11 +52,12 @@ pipeline {
         stage('Inject .env File into App Repo') {
             steps {
                 withCredentials([file(credentialsId: 'ENV_SECRET_KsTU', variable: 'ENV_FILE')]) {
-                    dir("../${APP_REPO_DIR}") {
-                        sh '''
+                    dir("${APP_REPO_DIR}") {
+                        sh """
                             if [ -e .env ]; then rm .env; fi
-                            cp "$ENV_FILE" .env
-                        '''
+                            cp "\$ENV_FILE" .env
+                            ls -la
+                        """
                     }
                     echo '.env file injected into application repo successfully.'
                 }
@@ -83,14 +90,10 @@ pipeline {
 
         stage('Inject terraform.tfvars') {
             steps {
-                withCredentials([file(
-                    credentialsId: 'terraform-kstu-vars',
-                    variable: 'TFVARS_FILE'
-                )]) {
-                    dir("${DEPLOYMENT_REPO_DIR}") {
-                        sh "cp -f \"${TFVARS_FILE}\" terraform.tfvars"
-                        echo 'terraform.tfvars injected.'
-                    }
+                withCredentials([file(credentialsId: 'terraform-kstu-vars', variable: 'TFVARS_FILE')]) {
+                    sh "cp -f \"${TFVARS_FILE}\" terraform.tfvars"
+                    sh "ls -la" // Debug to confirm files
+                    echo 'terraform.tfvars injected.'
                 }
             }
         }
@@ -98,9 +101,7 @@ pipeline {
         stage('Terraform Init') {
             steps {
                 withCredentials([aws(credentialsId: "${AWS_CREDENTIALS_ID}")]) {
-                    dir("${DEPLOYMENT_REPO_DIR}") {
-                        sh 'terraform init'
-                    }
+                    sh 'terraform init'
                 }
                 echo 'Terraform initialized successfully.'
             }
@@ -109,25 +110,32 @@ pipeline {
         stage('Terraform Plan') {
             steps {
                 withCredentials([aws(credentialsId: "${AWS_CREDENTIALS_ID}")]) {
-                    dir("${DEPLOYMENT_REPO_DIR}") {
-                        sh 'terraform plan -out=tfplan'
-                    }
+                    sh 'pwd' // Debug working directory
+                    sh 'ls -la' // Debug workspace contents
+                    sh 'ls -la waf-lamp-repo || echo "waf-lamp-repo not found"'
+                    sh 'ls -la waf-lamp-repo/Dockerfile || echo "Dockerfile not found"'
+                    sh 'terraform plan -out=tfplan'
                 }
                 echo 'Terraform plan generated successfully.'
             }
         }
 
         stage('Infracost Cost Estimation') {
-            steps {
-                withCredentials([aws(credentialsId: "${AWS_CREDENTIALS_ID}")]) {
-                    dir("${DEPLOYMENT_REPO_DIR}") {
-                        sh 'infracost breakdown --path . --format json --out-file infracost.json'
-                        sh 'infracost output --path infracost.json --format table'
-                    }
-                }
-                echo 'Cost estimation completed.'
-            }
+    steps {
+        withCredentials([
+            aws(credentialsId: "${AWS_CREDENTIALS_ID}"),
+            string(credentialsId: 'infracost-api-key', variable: 'INFRACOST_API_KEY'),
+            string(credentialsId: 'github-token', variable: 'GITHUB_TOKEN')
+        ]) {
+            sh '''
+                infracost breakdown --path . --format json --out-file infracost.json
+                infracost output --path infracost.json --format table
+           
+            '''
         }
+        echo 'Cost estimation completed.'
+    }
+}
 
         stage('Approval') {
             steps {
@@ -138,9 +146,7 @@ pipeline {
         stage('Terraform Apply') {
             steps {
                 withCredentials([aws(credentialsId: "${AWS_CREDENTIALS_ID}")]) {
-                    dir("${DEPLOYMENT_REPO_DIR}") {
-                        sh 'terraform apply -auto-approve tfplan'
-                    }
+                    sh 'terraform apply -auto-approve tfplan'
                 }
                 echo 'Infrastructure deployed successfully.'
             }
