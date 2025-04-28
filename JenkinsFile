@@ -120,23 +120,27 @@ pipeline {
             }
         }
 
-      stage('Infracost Cost Estimation') {
+   stage('Infracost Cost Estimation') {
     steps {
         withCredentials([
             aws(credentialsId: "${AWS_CREDENTIALS_ID}"),
             string(credentialsId: 'infracost-api-key', variable: 'INFRACOST_API_KEY'),
             string(credentialsId: 'github-token', variable: 'GITHUB_TOKEN')
         ]) {
-            sh '''
-                export INFRACOST_API_KEY=${INFRACOST_API_KEY}
-                
-                infracost breakdown --path . --format json --out-file infracost.json
-                infracost output --path infracost.json --format table
-            '''
+            withEnv([
+                "INFRACOST_API_KEY=${INFRACOST_API_KEY}",
+                "GITHUB_TOKEN=${GITHUB_TOKEN}"
+            ]) {
+                sh '''
+                    infracost breakdown --path . --format json --out-file infracost.json
+                    infracost output --path infracost.json --format table
+                '''
+            }
         }
         echo 'Cost estimation completed.'
     }
 }
+
 
 
         stage('Approval') {
