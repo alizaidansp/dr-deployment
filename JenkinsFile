@@ -130,20 +130,21 @@ pipeline {
             }
         }
 
-        stage('Cost Estimation') {
-            steps {
-                withCredentials([string(
-                    credentialsId: 'infracost-api-key',  // Jenkins credential for Infracost API key
-                    variable: 'INFRACOST_API_KEY'  // Bind to INFRACOST_API_KEY
-                )]) {
-                    // Generate Infracost JSON file before running cost_estimate.sh
-                    sh '''
-                    infracost breakdown --path . --format json --out-file infracost.json \\
-                        infracost output --path=infracost.json --format=table
-                    '''
-                }
-            }
+      stage('Cost Estimation') {
+    steps {
+        withCredentials([string(
+            credentialsId: 'infracost-api-key',  // Jenkins credential for Infracost API key
+            variable: 'INFRACOST_API_KEY'  // Bind to INFRACOST_API_KEY
+        )]) {
+            // Generate Infracost JSON file before running cost_estimate.sh
+            sh '''
+            infracost breakdown --path . --format json --out-file infracost.json
+            infracost output --path=infracost.json --format table
+            '''
         }
+    }
+}
+
 
         stage('Approval') {
             steps {
