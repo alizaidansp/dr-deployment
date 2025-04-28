@@ -1,4 +1,4 @@
-# AWS Disaster Recovery Project
+# AWS Disaster Recovery Project with Jenkins CI/CD Implementation
 
 ## Table of Contents
 1. [Introduction](#introduction)
@@ -30,11 +30,19 @@
 7. [Cost Considerations](#cost-considerations)
    - [Pilot Light Strategy Benefits](#pilot-light-strategy-benefits)
    - [Optimization Tips](#optimization-tips)
-8. [Troubleshooting](#troubleshooting)
+8. [Jenkins CI/CD Infrastructure as Code Implementation](#jenkins-cicd-infrastructure-as-code-implementation)
+   - [Introduction](#jenkins-introduction)
+   - [Jenkins Setup](#jenkins-setup)
+   - [Pipeline Configuration](#pipeline-configuration)
+   - [Integration with Version Control](#integration-with-version-control)
+   - [Security Best Practices](#security-best-practices)
+   - [Monitoring and Maintenance](#jenkins-monitoring-and-maintenance)
+   - [Troubleshooting](#jenkins-troubleshooting)
+9. [Troubleshooting](#troubleshooting)
    - [Common Issues and Solutions](#common-issues-and-solutions)
-9. [Security Considerations](#security-considerations)
-10. [Conclusion](#conclusion)
-11. [Additional Resources](#additional-resources)
+10. [Security Considerations](#security-considerations)
+11. [Conclusion](#conclusion)
+12. [Additional Resources](#additional-resources)
 
 ## Introduction
 
@@ -116,7 +124,6 @@ The project is organized as follows:
 ├── state-bootstrap          # init remote state setup
 ├── terraform.tfvars         # variable values
 └── variables.tf             # variable declarations
-
 ```
 
 ## Infrastructure Details
@@ -255,13 +262,11 @@ Follow these detailed steps to deploy the DR infrastructure:
      terraform init
      terraform apply -auto-approve
      ```
-   - This creates an S3 bucket (`ali-amalitech-state-bucket`) with DynamoDB to store the Terraform state, enabling collaboration and state synchronization.
+   - This creates an S3 bucket (`ali-amalitech-state-bucket`)   to store the Terraform state, enabling collaboration and state synchronization.
 
    **State Lock Test**:
     - Testing to ensure state lock is working properly:
    ![State Lock Test](image_assets/Test%20state-lock.png "State Lock") 
-
-
 
 3. **Configure Variables**  
    - Create or edit `terraform.tfvars` with your specific values:
@@ -292,9 +297,6 @@ Follow these detailed steps to deploy the DR infrastructure:
      ```
 
    - Ensure `availability_zones` and `availability_zones_secondary` match your regions (e.g., `["eu-west-1a", "eu-west-1b"]`).
-
----
-
 
 4. **Deploy the Infrastructure**
    - Return to the root directory:
@@ -356,8 +358,6 @@ The DR process follows the Pilot Light strategy, with automated steps to ensure 
 ### 4. Operational Testing 
 - Verify the secondary application is accessible and logs are updated.
 
-
-
 ## Maintenance and Monitoring
 
 ### Automated Backups
@@ -373,8 +373,6 @@ The DR process follows the Pilot Light strategy, with automated steps to ensure 
   - ALB health metrics
   - RDS availability
 
-
-
 ## Cost Considerations
 
 ### Pilot Light Strategy Benefits
@@ -386,15 +384,190 @@ The DR process follows the Pilot Light strategy, with automated steps to ensure 
 - Monitor cross-region data transfer costs (S3 CRR, RDS replication).
 - Regularly review and right-size resources based on actual recovery needs.
 
+## Jenkins CI/CD Infrastructure as Code Implementation
+
+### Jenkins Introduction
+
+This section details the Jenkins CI/CD implementation used to automate the deployment of our AWS Disaster Recovery infrastructure. Jenkins serves as the orchestration engine for our Infrastructure as Code (IaC) approach, enabling consistent, repeatable deployments across multiple AWS regions while maintaining security and governance standards.
+
+The Jenkins implementation addresses several key requirements:
+- Secure management of AWS and GitHub credentials
+- Automated building and pushing of Docker images
+- Terraform infrastructure deployment across primary and secondary regions
+- Consistent environment setup with version control
+- Audit trail for infrastructure changes
+
+### Jenkins Setup
+
+#### Installation and Configuration
+
+Jenkins is deployed as a containerized application, accessible via localhost:8080, providing a scalable and isolated environment for CI/CD operations. The system is configured with the necessary plugins including:
+
+- AWS Integration
+- Terraform
+- Docker
+- Pipeline
+- Git Integration
+- Blue Ocean for enhanced visualization
+
+#### Credentials Management
+
+Secure credential management is critical for the disaster recovery implementation. The following credentials were configured in Jenkins:
+
+1. **AWS Access Keys**:
+   - Configured as global credentials with the ID `MY_AWS_ACCESS_KEY`
+   - Includes both Access Key ID and Secret Access Key
+   - Permission scope set to global for cross-project accessibility
+
+   ![AWS Credentials Configuration](image_assets/jenkins-aws-credentials.png)
+
+2. **Environment Secrets**:
+   - Environment variables needed for configuration of the application stored as `ENV_SECRET_KSTU` 
+   - These variables contain configuration parameters for the LAMP stack
+
+   ![Environment Secret Configuration](image_assets/jenkins-env-secret.png)
+
+3. **GitHub Personal Access Token (PAT)**:
+  
+   - Stored securely in Jenkins as `JENKINS_PAT`
+
+   ![GitHub PAT Configuration](image_assets/jenkins-github-creds.jpg)
+   ![Jenkins GitHub Credentials](image_assets/jenkins-pat-creds.jpg)
+
+4. **Terraform Variables**:
+   - Terraform-specific variables stored as `terraform-tfvars`
+   - Contains sensitive configuration for both primary and secondary regions
+
+   ![Terraform Variables Configuration](image_assets/jenkins-terraform-vars.jpg)
+
+### Pipeline Configuration
+
+#### Pipeline Structure
+
+Two primary pipelines were implemented to manage different aspects of the deployment process:
+
+1. **Docker Image Pipeline**: Builds and pushes the LAMP stack application image to ECR
+2. **Disaster Recovery Infrastructure Pipeline**: Deploys the complete multi-region infrastructure using Terraform
+
+#### Dockerfile Pipeline
+
+The Docker pipeline successfully builds and pushes the LAMP application image to ECR with the following stages:
+
+1. Start
+2. Prepare Workspace Resources
+3. Clone Repository
+4. Inject env File
+5. Test ECR Access
+6. Authenticate Docker to ECR
+7. Build Docker Image
+8. Tag Docker Image
+9. Push Docker Image to ECR
+10. End
+
+![Docker Pipeline Execution](image_assets/jenkins-docker-pipeline.jpg)
+
+The pipeline takes approximately 2 minutes and 36 seconds to complete, with successful execution of all stages. Key achievements include:
+- Successful `docker build` of the LAMP application
+- Docker image successfully tagged and pushed to ECR repository
+
+#### Terraform Disaster Recovery Pipeline
+
+The Disaster Recovery Infrastructure pipeline manages the deployment of the entire AWS multi-region architecture with the following stages:
+
+1. Start
+2. Deployment Resources
+3. Clone Application Repository
+4. Inject env File into App Repo
+5. Set up Terraform State Backend
+6. Inject terraform.tfvars
+7. Terraform Init
+8. Terraform Plan
+9. Cost Estimation
+10. Approval
+11. Terraform Apply
+12. End
+
+![Terraform Pipeline Execution](image_assets/jenkins-terraform-pipeline.jpg)
+
+This pipeline successfully completes in 28 minutes and 25 seconds, deploying the complete infrastructure including:
+- VPCs and networking components in both regions
+- EC2 instances with Auto Scaling Groups
+- RDS primary and replica databases
+- S3 buckets with cross-region replication
+- Lambda functions for failover management
+- Global Accelerator for traffic routing
+
+
+### Integration with Version Control
+
+The Jenkins pipelines integrate with GitHub repositories to ensure infrastructure code is version controlled:
+
+1. **Source Code Management**:
+   - Pipelines configured to pull by from specified GitHub repositories
+   - Changes triggered by GitHub push events(using Ngrok webhook ) by user "me"
+
+2. **Webhooks**:
+   - GitHub webhooks configured to trigger pipeline execution on code changes
+   - Ensures infrastructure deployments stay in sync with code updates
+
+### Security Best Practices
+
+Several security measures are implemented in the Jenkins CI/CD setup:
+
+1. **Credential Isolation**:
+   - All secrets stored using Jenkins Credential Provider
+   - Credentials masked in logs and console output
+   - Restricted access to credential management
+
+
+
+2. **Secure Parameter Handling**:
+   - Sensitive values passed as environment variables
+   - Terraform variables injected at runtime
+   - No hardcoded secrets in pipeline scripts
+
+### Jenkins Monitoring and Maintenance
+
+The Jenkins environment includes several monitoring and maintenance features:
+
+1. **Pipeline Visualization**:
+   - Blue Ocean interface provides clear visualization of pipeline execution
+   - Stage-by-stage progress monitoring
+   - Easy identification of failed stages
+
+2. **Logging and Auditing**:
+   - Comprehensive logs for each build
+   - Audit trail of infrastructure changes
+   - Error reporting for troubleshooting
+
+
+
+### Jenkins Troubleshooting
+
+Common issues and their solutions:
+
+1. **Failed AWS Authentication**:
+   - Verify AWS credential validity in Jenkins credential store
+   - Check IAM permissions for the configured AWS user
+   - Ensure region configuration matches in pipeline and AWS credentials
+
+2. **Terraform State Lock Issues**:
+   - Use the included `state_file.sh` script to manage state locks
+   - Check S3 bucket access for state storage
+
+3. **GitHub Access Problems**:
+   - Verify PAT token expiration date
+   - Confirm repository permissions
+   - Check webhook configuration in GitHub repository settings
 
 ## Troubleshooting
 
 ### Common Issues and Solutions
 
 1. **State Lock Issues**: 
-   - Use `state_file.sh` to manually create state-files if you dont want use terraform :
+   - Use `state_file.sh` to manually create state-files if you dont want use terraform:
      ```bash
-     ./bash_scripts/state_file.sh unlock
+     ./bash_scripts/state_file.sh 
      ```
    - If necessary, use `nuke.sh` to reset networking resources:
      ```bash
@@ -403,7 +576,6 @@ The DR process follows the Pilot Light strategy, with automated steps to ensure 
 
 2. **Failover Failures**: 
    - Check Lambda logs in CloudWatch for detailed error messages.
-   - Verify network connectivity between regions.
    - Check IAM permissions for cross-region operations.
 
 3. **AMI Issues**:
@@ -415,8 +587,6 @@ The DR process follows the Pilot Light strategy, with automated steps to ensure 
    - Verify security group rules allow proper access.
    - Check RDS parameter groups for configuration consistency.
    - Monitor replication lag between primary and replica.
-
-
 
 ## Security Considerations
 
@@ -435,12 +605,15 @@ The DR process follows the Pilot Light strategy, with automated steps to ensure 
 
 ## Conclusion
 
-This Disaster Recovery Project implements the Pilot Light strategy effectively, ensuring minimal costs and rapid recovery using Terraform and AWS services. The solution balances cost efficiency with recovery time objectives by maintaining critical infrastructure components in a scaled-down state in the secondary region.
+This AWS Disaster Recovery Project implements the Pilot Light strategy effectively, ensuring minimal costs and rapid recovery using Terraform and AWS services. The solution balances cost efficiency with recovery time objectives by maintaining critical infrastructure components in a scaled-down state in the secondary region.
 
-Regular testing and maintenance will keep the solution robust and aligned with business needs. The modular Terraform approach allows for easy updates and extensions as requirements evolve.
+The Jenkins CI/CD implementation provides a robust, secure, and automated approach to deploying and managing the infrastructure across multiple regions. Through careful credential management, pipeline orchestration, and version control integration, the project achieves reliable and consistent infrastructure deployment while maintaining security and governance standards.
+
+Regular testing and maintenance will keep the solution robust and aligned with business needs. The modular Terraform approach and automated Jenkins pipelines allow for easy updates and extensions as requirements evolve.
 
 ## Additional Resources
 
 - [AWS Disaster Recovery Documentation](https://aws.amazon.com/disaster-recovery/)
 - [Terraform Documentation](https://www.terraform.io/docs)
 - [AWS Well-Architected Framework: Reliability Pillar](https://docs.aws.amazon.com/wellarchitected/latest/reliability-pillar/welcome.html)
+- [Jenkins Documentation](https://www.jenkins.io/doc/)
