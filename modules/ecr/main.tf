@@ -42,13 +42,13 @@ resource "null_resource" "docker_build_push" {
       echo "Navigating to ${var.dockerfile_path}"
       cd ${var.dockerfile_path}
       echo "Building Docker image"
-      sudo docker build -t lamp-app:latest .
+       docker build -t lamp-app:latest .
       echo "Authenticating with ECR"
-      aws ecr get-login-password --region ${var.primary_region} | sudo docker login --username AWS --password-stdin ${var.account_id}.dkr.ecr.${var.primary_region}.amazonaws.com
+      aws ecr get-login-password --region ${var.primary_region} |  docker login --username AWS --password-stdin ${var.account_id}.dkr.ecr.${var.primary_region}.amazonaws.com
       echo "Tagging image"
-      sudo docker tag lamp-app:latest ${aws_ecr_repository.lamp_app.repository_url}:latest
+       docker tag lamp-app:latest ${aws_ecr_repository.lamp_app.repository_url}:latest
       echo "Pushing image"
-      sudo docker push ${aws_ecr_repository.lamp_app.repository_url}:latest
+       docker push ${aws_ecr_repository.lamp_app.repository_url}:latest
     EOT
   }
 
