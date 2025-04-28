@@ -85,7 +85,7 @@ pipeline {
                             echo "Running Terraform backend setup..."
 
                             // Running Terraform backend setup
-                            dir("${DEPLOYMENT_REPO_DIR}/state-bootstrap") {
+                            dir("state-bootstrap") {
                                 sh 'terraform init'
                                 sh 'terraform apply -auto-approve'
                             }
