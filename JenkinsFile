@@ -114,7 +114,7 @@ pipeline {
                     sh 'ls -la' // Debug workspace contents
                     sh 'ls -la waf-lamp-repo || echo "waf-lamp-repo not found"'
                     sh 'ls -la waf-lamp-repo/Dockerfile || echo "Dockerfile not found"'
-                    sh 'terraform plan'
+                    sh 'terraform plan -out=tfplan'
                 }
                 echo 'Terraform plan generated successfully.'
             }
@@ -129,12 +129,10 @@ pipeline {
         ]) {
             withEnv([
                 "INFRACOST_API_KEY=${INFRACOST_API_KEY}",
-                "GITHUB_TOKEN=${GITHUB_TOKEN}"
             ]) {
-                sh '''
-                    infracost breakdown --path . --format json --out-file infracost.json
-                    infracost output --path infracost.json --format table
-                '''
+                sh 'infracost breakdown --path . --format json --out-file infracost.json'
+                sh 'infracost output --path infracost.json --format table'
+            
             }
         }
         echo 'Cost estimation completed.'
