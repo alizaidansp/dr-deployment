@@ -120,24 +120,23 @@ pipeline {
             }
         }
 
-   stage('Infracost Cost Estimation') {
-    steps {
-        withCredentials([
-            aws(credentialsId: "${AWS_CREDENTIALS_ID}"),
-            string(credentialsId: 'infracost-api-key', variable: 'INFRACOST_API_KEY'),
-            string(credentialsId: 'github-token', variable: 'GITHUB_TOKEN')
-        ]) {
-            withEnv([
-                "INFRACOST_API_KEY=${INFRACOST_API_KEY}",
-            ]) {
-                sh 'infracost breakdown --path . --format json --out-file infracost.json'
-                sh 'infracost output --path infracost.json --format table'
-            
+    stage('Cost Estimation') {
+           
+            steps {
+                withCredentials([string(
+                    credentialsId: 'infracost-api-key',  // Jenkins credential for Infracost API key
+                    variable: 'INFRACOST_API_KEY'  // Bind to INFRACOST_API_KEY
+                )]) {
+                        // Generate Infracost JSON file before running cost_estimate.sh
+                        sh '''
+                        infracost breakdown --path . --format json --out-file infracost.json \\
+                           
+                        infracost output --path=infracost.json --format=table
+                        '''
+                    
+                }
             }
         }
-        echo 'Cost estimation completed.'
-    }
-}
 
 
 
