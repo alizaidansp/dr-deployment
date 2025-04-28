@@ -64,24 +64,37 @@ pipeline {
             }
         }
 
-        stage('Set up Terraform State Backend') {
+           stage('Set up Terraform State Backend') {
             steps {
                 withCredentials([aws(credentialsId: "${AWS_CREDENTIALS_ID}")]) {
                     script {
-                        def bucketExists = sh(
-                            script: "aws s3api head-bucket --bucket ${S3_BUCKET_NAME} > /dev/null 2>&1; echo \$?",
-                            returnStdout: true
-                        ).trim()
+                        // Check if the bucket exists
+                        def result = sh(
+                            script: "aws s3api head-bucket --bucket ${S3_BUCKET_NAME} --region eu-west-1",
+                            returnStatus: true,
+                            // if exit status is 0, bucket exists
 
-                        if (bucketExists == '0') {
-                            echo "S3 Bucket '${S3_BUCKET_NAME}' exists. Skipping Terraform backend setup."
-                        } else {
-                            echo "S3 Bucket '${S3_BUCKET_NAME}' does not exist. Running Terraform backend setup."
+                            returnStdout: true 
+                            // This tells Jenkins to capture the standard output (stdout) of the 
+                            // command and return it as a string.
+                        )
+
+                        // Output the result for debugging
+                        echo "Bucket check result: ${result}"
+
+                        // If the status is non-zero, it means there was an error
+                        if (result != '0') {
+                            echo "Error checking bucket existence: ${result}"
+                            echo "Running Terraform backend setup..."
+
+                            // Running Terraform backend setup
                             dir("${DEPLOYMENT_REPO_DIR}/state-bootstrap") {
                                 sh 'terraform init'
                                 sh 'terraform apply -auto-approve'
-                            }
+                            // }
                             echo 'Terraform state backend created successfully.'
+                        } else {
+                            echo "S3 Bucket '${S3_BUCKET_NAME}' exists. Skipping Terraform backend setup."
                         }
                     }
                 }
