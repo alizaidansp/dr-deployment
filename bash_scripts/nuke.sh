@@ -7,7 +7,7 @@ VPCS=$(aws ec2 describe-vpcs \
   --query "Vpcs[].VpcId" --output text)
 
 for VPC_ID in $VPCS; do
-  echo -e "\n💥 Destroying VPC $VPC_ID and all its children..."
+  echo -e "\n Destroying VPC $VPC_ID and all its children..."
 
   ## 1) Internet Gateways
   for IGW in $(aws ec2 describe-internet-gateways \

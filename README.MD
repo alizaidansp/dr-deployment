@@ -58,7 +58,7 @@ The DR Project AWS follows the Pilot Light strategy, where the secondary region 
 
 The overall architecture implements a cross-region disaster recovery solution with automated failover capabilities:
 
-![DR Infrastructure Architecture](image_assets/DR%20INFRASTRUCTURE-2.jpg "AWS Multi-Region DR Architecture")
+![DR Infrastructure Architecture](image_assets/DR%20INFRASTRUCTURE-4.jpg "AWS Multi-Region DR Architecture")
 
 ### Key Components
 

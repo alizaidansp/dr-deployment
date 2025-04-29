@@ -41,7 +41,7 @@ resource "aws_lambda_function" "snapshot_lambda" {
 
   handler       = "lambda_function.lambda_handler"
   runtime       = "python3.9"
-  timeout       = 60
+  timeout       = 60 
   source_code_hash = data.archive_file.lambda_zip.output_base64sha256
 
   environment {

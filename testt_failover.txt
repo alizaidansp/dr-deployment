@@ -4,7 +4,7 @@ Testomg alb health
 
 aws elbv2 deregister-targets \
   --target-group-arn $(terraform output -raw primary_target_group_arn) \
-  --targets Id=i-i-06a11ac781feee731 \
+  --targets Id=i-0450ec18dd6a067ef \
   --region eu-west-1
 
           ─╯
