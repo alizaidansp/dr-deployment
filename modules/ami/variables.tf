@@ -22,3 +22,4 @@ variable "ami_name" {
   description = "Name for the AMI"
   default     = "lamp-app-ami"
 }
+

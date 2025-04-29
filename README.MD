@@ -385,7 +385,7 @@ The DR process follows the Pilot Light strategy, with automated steps to ensure 
 - Regularly review and right-size resources based on actual recovery needs.
 
 ## Jenkins CI/CD Infrastructure as Code Implementation
-
+![DR Infrastructure Architecture](image_assets/DR%20INFRASTRUCTURE-Jenkins.png "AWS Multi-Region DR Architecture")
 ### Jenkins Introduction
 
 This section details the Jenkins CI/CD implementation used to automate the deployment of our AWS Disaster Recovery infrastructure. Jenkins serves as the orchestration engine for our Infrastructure as Code (IaC) approach, enabling consistent, repeatable deployments across multiple AWS regions while maintaining security and governance standards.
@@ -617,3 +617,10 @@ Regular testing and maintenance will keep the solution robust and aligned with b
 - [Terraform Documentation](https://www.terraform.io/docs)
 - [AWS Well-Architected Framework: Reliability Pillar](https://docs.aws.amazon.com/wellarchitected/latest/reliability-pillar/welcome.html)
 - [Jenkins Documentation](https://www.jenkins.io/doc/)
+
+
+Note:  ECR Module behaves differently when using it with Jenkins, it doesnt require sudo cus the app is pulled automatically but sudo is required for local build
+
+sECOND note:
+  dockerfile_path  = "${path.module}/../waf-lamp-repo"  # Correct path to directory(Local Deployment)
+  # dockerfile_path  = "${path.module}/waf-lamp-repo"  # Correct path to directory(Jenkins Deployment)

@@ -15,6 +15,11 @@ module "ami" {
   primary_security_group_id = module.security_group.ec2_sg_id
   primary_subnet_id        = module.vpc.private_subnet_ids[0]
   iam_instance_profile     = module.iam.instance_profile_name
+    depends_on = [
+    module.vpc,
+    module.security_group,
+    module.iam
+  ]
 }
 
  # ECR Configuration

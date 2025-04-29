@@ -21,6 +21,7 @@ data "aws_ami" "amazon_linux" {
 resource "aws_instance" "ami_builder" {
  
   ami                    = data.aws_ami.amazon_linux.id
+  # ami                    = "ami-0e03e80affb5b6b06"
   instance_type          = "t2.micro"
   vpc_security_group_ids = [var.primary_security_group_id]
   subnet_id              = var.primary_subnet_id
@@ -75,3 +76,5 @@ resource "null_resource" "cleanup" {
   }
   depends_on = [aws_ami_from_instance.lamp_ami, aws_ami_copy.lamp_ami_secondary]
 }
+
+
