@@ -619,8 +619,3 @@ Regular testing and maintenance will keep the solution robust and aligned with b
 - [Jenkins Documentation](https://www.jenkins.io/doc/)
 
 
-Note:  ECR Module behaves differently when using it with Jenkins, it doesnt require sudo cus the app is pulled automatically but sudo is required for local build
-
-sECOND note:
-  dockerfile_path  = "${path.module}/../waf-lamp-repo"  # Correct path to directory(Local Deployment)
-  # dockerfile_path  = "${path.module}/waf-lamp-repo"  # Correct path to directory(Jenkins Deployment)
