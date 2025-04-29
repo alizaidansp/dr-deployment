@@ -4,11 +4,11 @@ Testomg alb health
 
 aws elbv2 deregister-targets \
   --target-group-arn $(terraform output -raw primary_target_group_arn) \
-  --targets Id=i-04ca408b190d14c14 \
+  --targets Id=i-i-06a11ac781feee731 \
   --region eu-west-1
 
-╰─ aws rds describe-db-snapshots --db-instance-identifier lamp-db-primary --region $(terraform output -raw primary_region)               ─╯
+          ─╯
   
 
 
-  1.
+  
