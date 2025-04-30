@@ -5,7 +5,14 @@
 # done )
 
 
+
+# Failover modification
+
+# CLOUDWATCH ALARM —→ (NEED PERRMISSION FROM CLOUDWATCH )SNS TOPIC & SUBSCRIPTION —→(PERMISSION FOR SNS TO INVOKE LAMBDA)TRIGGER LAMBDA FUNCTION,
 # AMI module
+
+# Dont forget to look at Note.MD before running this infrastructure
+
 module "ami" {
    providers = {
     aws.secondary = aws.secondary
@@ -271,6 +278,7 @@ module "primary_monitoring" {
   primary_target_group_arn_suffix = module.alb.target_group_arn_suffix
   secondary_region         = var.secondary_region
   account_id               = var.account_id
+  failover_lambda_arn= module.secondary_failover.failover_lambda_arn
 
 }
 
@@ -294,6 +302,8 @@ lambda_environment_variables = {
     SECONDARY_REGION             = var.secondary_region
     PRIMARY_REGION         = var.primary_region
   }
+
+  sns_topic_arn = module.primary_monitoring.sns_topic_arn
 }
 
 # Lambda Function for Snapshot Creation

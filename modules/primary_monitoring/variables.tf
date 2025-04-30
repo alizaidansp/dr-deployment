@@ -26,3 +26,10 @@ variable "account_id" {
   
 }
 
+
+
+variable "failover_lambda_arn" {
+ 
+  type        = string
+  description = "ARN of the Lambda function in the secondary region"
+}

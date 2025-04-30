@@ -2,13 +2,13 @@
 
 ## Jenkins vs Local Deployment Differences
 
-### Docker Privileges
+### Docker Privileges(in ECR Module,)
 - **Jenkins Deployment**: Does not require `sudo` permissions as the app is pulled automatically
 - **Local Deployment**: Requires `sudo` permissions for Docker commands
 
 ### File Path Configuration
 
-#### Path Differences
+#### Path Differences(main.tf)
 - **Local Deployment**: 
   ```terraform
   dockerfile_path = "${path.module}/../waf-lamp-repo" # Correct path to directory

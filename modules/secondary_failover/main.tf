@@ -29,31 +29,47 @@ resource "aws_lambda_function" "failover" {
   }
 }
 
+# proactive monitoring using eventbridge start
 
-# EventBridge Rule to Schedule Lambda Every Minute
-resource "aws_cloudwatch_event_rule" "health_check_schedule" {
-  name                = "health_check_schedule"
-  description         = "Run health check every minute"
-  schedule_expression = "rate(1 minute)" #system can be down for 10 minutes
-  # schedule_expression = "rate(10 minutes)" #system can be down for 10 minutes
-# 
-}
+# # EventBridge Rule to Schedule Lambda Every Minute
+# resource "aws_cloudwatch_event_rule" "health_check_schedule" {
+#   name                = "health_check_schedule"
+#   description         = "Run health check every minute"
+#   schedule_expression = "rate(1 minute)" #system can be down for 10 minutes
+#   # schedule_expression = "rate(10 minutes)" #system can be down for 10 minutes
+# # 
+# }
 
-resource "aws_cloudwatch_event_target" "failover_lambda" {
-  rule      = aws_cloudwatch_event_rule.health_check_schedule.name
-  target_id = "failover_lambda"
-  arn       = aws_lambda_function.failover.arn
-}
+# resource "aws_cloudwatch_event_target" "failover_lambda" {
+#   rule      = aws_cloudwatch_event_rule.health_check_schedule.name
+#   target_id = "failover_lambda"
+#   arn       = aws_lambda_function.failover.arn
+# }
+
+
 
 # Permission for EventBridge to Invoke Lambda
-resource "aws_lambda_permission" "allow_eventbridge" {
-  statement_id  = "AllowExecutionFromEventBridge"
+# resource "aws_lambda_permission" "allow_eventbridge" {
+#   statement_id  = "AllowExecutionFromEventBridge"
+#   action        = "lambda:InvokeFunction"
+#   function_name = aws_lambda_function.failover.function_name
+#   principal     = "events.amazonaws.com"
+#   source_arn    = aws_cloudwatch_event_rule.health_check_schedule.arn
+# }
+
+# proactive monitoring using eventbridge end
+
+
+
+# Allow sns to invoke this lambda function
+resource "aws_lambda_permission" "allow_sns_invoke" {
+  statement_id  = "AllowExecutionFromSNS"
   action        = "lambda:InvokeFunction"
   function_name = aws_lambda_function.failover.function_name
-  principal     = "events.amazonaws.com"
-  source_arn    = aws_cloudwatch_event_rule.health_check_schedule.arn
-}
 
+  principal     = "sns.amazonaws.com"
+  source_arn    = var.sns_topic_arn
+}
 # Outputs
 output "failover_lambda_name" {
   value = aws_lambda_function.failover.function_name
