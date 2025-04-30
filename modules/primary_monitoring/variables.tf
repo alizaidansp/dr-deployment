@@ -3,20 +3,17 @@ variable "primary_region" {
   description = "Primary AWS region"
 }
 
-variable "primary_alb_arn" {
-  type        = string
-  description = "ARN of the primary Application Load Balancer"
-}
 
-variable "primary_target_group_arn" {
+
+variable "primary_target_group_arn_suffix" {
   type        = string
-  description = "ARN of the primary ALB Target Group"
+  description = "ARN suffix of the primary ALB Target Group"
 }
 
 
-variable "alb_arn" {
+variable "primary_alb_arn_suffix" {
   type        = string
-  description = "ARN of the Primary Application Load Balancer"
+  description = "ARN suffix of the Primary Application Load Balancer"
   
 }
 variable "secondary_region" {

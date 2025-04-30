@@ -267,9 +267,8 @@ module "compute_secondary" {
 module "primary_monitoring" {
   source                  = "./modules/primary_monitoring"
   primary_region          = var.primary_region
-  primary_alb_arn         = module.alb.alb_arn
-  primary_target_group_arn = module.alb.target_group_arn
-  alb_arn         = module.alb.alb_arn
+  primary_alb_arn_suffix      = module.alb.alb_arn_suffix
+  primary_target_group_arn_suffix = module.alb.target_group_arn_suffix
   secondary_region         = var.secondary_region
   account_id               = var.account_id
 

@@ -24,10 +24,11 @@ resource "aws_sns_topic_subscription" "test_subscription" {
 resource "aws_cloudwatch_metric_alarm" "primary_alb_unhealthy" {
   
   alarm_name          = "primary-alb-unhealthy"
-  namespace           = "AWS/ApplicationELB"
-  metric_name         = "UnHealthyHostCount"
+  namespace          = "AWS/ApplicationELB"
+  metric_name        = "UnHealthyHostCount"
    dimensions = {
-    LoadBalancer = var.alb_arn
+      TargetGroup = var.primary_target_group_arn_suffix
+    LoadBalancer = var.primary_alb_arn_suffix
   }
   statistic           = "Sum"
   period              = 60
