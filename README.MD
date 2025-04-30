@@ -89,7 +89,7 @@ The overall architecture implements a cross-region disaster recovery solution wi
    - Defines roles and policies for S3 replication, EC2 instance profiles, and Lambda execution.
 
 9. **Monitoring**:
-   - Uses CloudWatch to monitor resource health and trigger failover when necessary using ping strategy.
+   - CloudWatch Alarms are configured to monitor resource(EC2 and RDS) health and trigger failover actions when thresholds are breached. Appropriate permissions must be granted to CloudWatch to create alarms. These alarms publish messages to an SNS Topic, which must have permission to invoke the associated Lambda function. The Lambda function is triggered to handle the failover or corrective actions, ensuring high availability and resilience.
 
 10. **AMI (Amazon Machine Image)**:
     - Pre-configured AMI for consistent and rapid deployment of EC2 instances in both regions.
@@ -184,7 +184,7 @@ The project is organized as follows:
 
 ### 5. Lambda (Serverless Compute)
 - **Failover Lambda**:
-  - Deployed in the `secondary_failover` module, pings the primary ALB at defined intervals and when things are wrong, gets triggered to scale EC2 and promote RDS. Global Accelerator automatically shifts traffic to the secondary region in case of a failure.
+  - Deployed in the `secondary_failover` module, the Lambda function is triggered based on CloudWatch alarms rather than periodic pings. Upon activation, it handles scaling EC2 instances and promoting the RDS instance in the secondary region. In the event of a failure, AWS Global Accelerator automatically redirects traffic to the secondary region to maintain availability.
 - **Snapshot Lambda**:
   - Runs daily at 2 AM (via `schedule_expression` in the `manual_snapshot` module) to create RDS snapshots.
 - **Configuration**:
