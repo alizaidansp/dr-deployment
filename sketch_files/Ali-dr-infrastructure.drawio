@@ -1,6 +1,6 @@
 <mxfile host="app.diagrams.net" agent="Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36" version="26.2.14">
   <diagram name="Page-1" id="4pti6fY79r4CVNWM3kQW">
-    <mxGraphModel dx="2852" dy="1650" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="3300" pageHeight="2339" background="light-dark(#FFFFFF,#FFFFFF)" math="0" shadow="0">
+    <mxGraphModel dx="1584" dy="917" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="3300" pageHeight="2339" background="light-dark(#FFFFFF,#FFFFFF)" math="0" shadow="0">
       <root>
         <mxCell id="0" />
         <mxCell id="1" parent="0" />
@@ -140,7 +140,7 @@
           <mxGeometry x="2500" y="10.000000000000043" width="186.95" height="98.85" as="geometry" />
         </mxCell>
         <mxCell id="uiIYIumYD0wpSOT2Yrbh-2" value="" style="sketch=0;points=[[0,0,0],[0.25,0,0],[0.5,0,0],[0.75,0,0],[1,0,0],[0,1,0],[0.25,1,0],[0.5,1,0],[0.75,1,0],[1,1,0],[0,0.25,0],[0,0.5,0],[0,0.75,0],[1,0.25,0],[1,0.5,0],[1,0.75,0]];outlineConnect=0;fontColor=#232F3E;fillColor=#8C4FFF;strokeColor=light-dark(#FFFFFF,#FFFFFF);dashed=0;verticalLabelPosition=bottom;verticalAlign=top;align=center;html=1;fontSize=12;fontStyle=0;aspect=fixed;shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.global_accelerator;" parent="1" vertex="1">
-          <mxGeometry x="1610" y="146" width="160" height="160" as="geometry" />
+          <mxGeometry x="1610" y="124" width="160" height="160" as="geometry" />
         </mxCell>
         <mxCell id="uiIYIumYD0wpSOT2Yrbh-4" value="&lt;b&gt;&lt;font style=&quot;font-size: 20px; color: light-dark(rgb(55, 118, 144), rgb(55, 118, 144));&quot;&gt;Region - eu-west-1 (Ireland)&lt;/font&gt;&lt;/b&gt;" style="points=[[0,0],[0.25,0],[0.5,0],[0.75,0],[1,0],[1,0.25],[1,0.5],[1,0.75],[1,1],[0.75,1],[0.5,1],[0.25,1],[0,1],[0,0.75],[0,0.5],[0,0.25]];outlineConnect=0;gradientColor=none;html=1;whiteSpace=wrap;fontSize=12;fontStyle=0;container=1;pointerEvents=0;collapsible=0;recursiveResize=0;shape=mxgraph.aws4.group;grIcon=mxgraph.aws4.group_region;strokeColor=light-dark(#377690,#377690);fillColor=none;verticalAlign=top;align=left;spacingLeft=30;fontColor=#147EBA;dashed=1;strokeWidth=7;" parent="1" vertex="1">
           <mxGeometry x="42" y="340" width="1570" height="1890" as="geometry" />
@@ -342,7 +342,7 @@
           </mxGeometry>
         </mxCell>
         <mxCell id="FlokSWe_QwU0IFt5nSPP-1" value="&lt;b&gt;&lt;font style=&quot;color: light-dark(rgb(0, 0, 0), rgb(0, 0, 0)); font-size: 25px;&quot;&gt;Global Accelerator&lt;/font&gt;&lt;/b&gt;" style="text;html=1;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;" parent="1" vertex="1">
-          <mxGeometry x="1575" y="427" width="244" height="13" as="geometry" />
+          <mxGeometry x="1574" y="293" width="244" height="13" as="geometry" />
         </mxCell>
         <mxCell id="BRUsh65-k8UxZ447Dg2f-6" style="rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=5;strokeColor=light-dark(#E7157B,#E7157B);dashed=1;" parent="1" source="HRETSZzPuDFT4tJ0ol7Q-36" target="ZEAQgn_k6CVQIJqzp0HZ-1" edge="1">
           <mxGeometry relative="1" as="geometry">
